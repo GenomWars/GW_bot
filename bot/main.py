@@ -18,14 +18,12 @@ async def main():
     )
     dp = Dispatcher()
     dp.include_router(start_router)
-    logger.info
-("Бот запущен!")
+    logger.info("Бот запущен!")
     try:
         await dp.start_polling(bot)
     finally:
         await bot.session.close()
-        logger.info
-("Бот остановлен")
+        logger.info("Бот остановлен")
+
 if __name__ == "__main__":
-    asyncio.run
-(main())
+    asyncio.run(main())

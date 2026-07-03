@@ -14,7 +14,7 @@ MAX_BACK_ROW = 5
 MAX_LBS = 5
 RARITY_COLORS = {
     'Common': '⬜',
-    'Rare': 🟩',
+    'Rare': '🟩',
     'Epic': '🟪',
     'Legendary': '🟧',
 }

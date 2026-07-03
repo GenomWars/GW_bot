@@ -40,8 +40,7 @@ async def callback_choose_kingdom(callback: types.CallbackQuery):
     await callback.message.delete()
     await callback.answer(f"Выбрано: {kingdom}")
     await callback.message.answer(f"✅ Выбрано царство: {kingdom}")
-@start_router.callback_query(lambda c: c.data
- == "cancel")
+@start_router.callback_query(lambda c: c.data == "cancel")
 async def callback_cancel(callback: types.CallbackQuery):
     await callback.message.delete()
     await callback.answer("Отменено")
