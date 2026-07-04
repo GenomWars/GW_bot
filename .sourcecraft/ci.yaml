@@ -6,7 +6,7 @@ on:
 tokens:
   genomewars-token:
     service_connection: genomewars
-    scope: repo
+    scope: ref
 workflows:
   cicd:
     tasks:
