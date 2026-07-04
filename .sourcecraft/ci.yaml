@@ -1,0 +1,48 @@
+on:
+  push:
+    - workflows: [cicd]
+filter:
+  branches: ["master", "main"]
+tokens:
+  genomewars-token:
+    service_connection: genomewars
+    scope: repo
+workflows:
+  cicd:
+    tasks:
+      - name: deploy-bot
+        env:
+          SOURCE_PATH: "./"
+          YC_FUNCTION_NAME: "genomewars"
+          YC_FUNCTION_RUNTIME: "nodejs18"  # или python312, в зависимости от вашего кода
+          YC_FUNCTION_ENTRYPOINT: "index.handler"
+        cubes:
+          - name: get-iam-token
+            env:
+              ID_TOKEN: ${{ tokens.genomewars-token.id_token }}
+              YC_SA_ID: ${{ tokens.genomewars-token.service_account_id }}
+            image: cr.yandex/sourcecraft/yc-iam:latest
+          - name: check-and-create-function
+            env:
+              YC_IAM_TOKEN: ${{ cubes.get-iam-token.outputs.IAM_TOKEN }}
+              YC_FOLDER_ID: ${{ tokens.genomewars-token.folder_id }}
+            image:
+              name: cr.yandex/sourcecraft/yc-cli:latest
+            script:
+              - yc config set folder-id $YC_FOLDER_ID
+              - if ! yc serverless function get --name=$YC_FUNCTION_NAME; then
+                  yc serverless function create --name=$YC_FUNCTION_NAME
+                fi
+          - name: deploy-function
+            env:
+              YC_IAM_TOKEN: ${{ cubes.get-iam-token.outputs.IAM_TOKEN }}
+              YC_FOLDER_ID: ${{ tokens.genomewars-token.folder_id }}
+            image:
+              name: cr.yandex/sourcecraft/yc-cli:latest
+            script:
+              - yc serverless function version create \
+                  --function-name=$YC_FUNCTION_NAME \
+                  --runtime=$YC_FUNCTION_RUNTIME \
+                  --entrypoint=$YC_FUNCTION_ENTRYPOINT \
+                  --source-path=$SOURCE_PATH \
+                  --environment BOT_TOKEN=${{ secrets.BOT_TOKEN }}
