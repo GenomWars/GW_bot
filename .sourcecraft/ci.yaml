@@ -48,4 +48,6 @@ workflows:
                   --runtime=$YC_FUNCTION_RUNTIME \
                   --entrypoint=$YC_FUNCTION_ENTRYPOINT \
                   --source-path=$SOURCE_PATH \
+                  --execution-timeout=30s \
+                  --memory=256M \
                   --environment BOT_TOKEN=${{ secrets.BOT_TOKEN }}
