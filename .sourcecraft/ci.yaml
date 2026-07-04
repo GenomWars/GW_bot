@@ -42,6 +42,7 @@ workflows:
               name: cr.yandex/sourcecraft/yc-cli:latest
             script:
               - |
+                yc config set folder-id $YC_FOLDER_ID
                 yc serverless function version create \
                   --function-name=$YC_FUNCTION_NAME \
                   --runtime=$YC_FUNCTION_RUNTIME \
