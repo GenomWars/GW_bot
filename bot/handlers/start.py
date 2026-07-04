@@ -1,7 +1,7 @@
 # bot/handlers/start.py
 from aiogram import Router, types
 from aiogram.filters import Command
-from bot.utils.database import load_game
+from bot.utils.database import load_game, delete_game
 start_router = Router()
 @start_router.message(Command("start"))
 async def cmd_start(message: types.Message):
@@ -39,8 +39,7 @@ async def cmd_new_game(message: types.Message):
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                types.InlineKeyboardButton(text="🐾 Animalia", callback_data="kingdom_Animalia"),
-                types.InlineKeyboardButton(text="🌿 Plantae", callback_data="kingdom_Plantae")
+                types.InlineKeyboardButton(text="🐾 Animalia", callback_data="kingdom_Animalia"), types.InlineKeyboardButton(text="🌿 Plantae", callback_data="kingdom_Plantae")
             ],
             [
                 types.InlineKeyboardButton(text="🍄 Fungi", callback_data="kingdom_Fungi"),
@@ -53,6 +52,7 @@ async def cmd_new_game(message: types.Message):
     await message.answer(text, parse_mode="HTML", reply_markup=keyboard)
 @start_router.message(lambda message: message.text == "📖 Правила")
 async def cmd_rules(message: types.Message):
+    """Обработчик кнопки 'Правила'"""
     text = (
         "📖 <b>Правила игры «МУТАЦИЯ»</b>\n\n"
         "🎯 <b>Цель:</b> Уничтожить планету противника (10 HP).\n\n"
@@ -74,3 +74,27 @@ async def cmd_rules(message: types.Message):
     )
     
     await message.answer(text, parse_mode="HTML")
+@start_router.message(Command("help"))
+async def cmd_help(message: types.Message):
+    """Обработчик команды /help — правила игры"""
+    await cmd_rules(message)
+@start_router.message(Command("endgame"))
+async def cmd_end_game(message: types.Message):
+    """Обработчик команды /endgame — завершить игру"""
+    delete_game(message.from_user.id)
+    await message.answer("✅ Игра завершена. Начни новую: /newgame")
+@start_router.message(Command("genome"))
+async def cmd_genome(message: types.Message):
+    """Обработчик команды /genome — древо геномов (заглушка)"""
+    await message.answer(
+        "🌿 <b>Древо геномов</b>\n\n"
+        "Показывает прогресс в каждом царстве.\n"
+        "Функция в разработке.",
+        parse_mode="HTML"
+    )
+@start_router.message(Command("clear"))
+async def cmd_clear(message: types.Message):
+    """Обработчик команды /clear — очистка чата"""
+    await message.delete()
+    msg = await message.answer("🧹 Чат очищен!")
+    await msg.delete()
