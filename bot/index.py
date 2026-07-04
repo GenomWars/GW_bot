@@ -31,11 +31,25 @@ dp.include_router(game_router)
 async def handler(event, context):
     """
     Точка входа для Yandex Cloud Functions.
-    Принимает HTTP-запрос от API Gateway и передаёт его в aiogram.
+    Принимает HTTP-запрос от Telegram (POST) и передаёт его в aiogram.
     """
     try:
+        # GET-запрос — просто проверка работоспособности
+        if event.get('httpMethod') == 'GET':
+            return {
+                'statusCode': 200,
+                'body': json.dumps({'status': 'ok', 'message': 'Bot is running'})
+            }
+
         # Парсим тело запроса (Telegram отправляет JSON)
-        body = json.loads(event['body'])
+        body = event.get('body', '')
+        if not body:
+            return {
+                'statusCode': 200,
+                'body': json.dumps({'status': 'ok'})
+            }
+
+        body = json.loads(body)
         logger.info(f"Получено обновление: {body}")
 
         # Создаём объект Update
@@ -46,11 +60,11 @@ async def handler(event, context):
 
         return {
             'statusCode': 200,
-            'body': 'OK'
+            'body': json.dumps({'status': 'ok'})
         }
     except Exception as e:
         logger.error(f"Ошибка: {e}")
         return {
             'statusCode': 500,
-            'body': str(e)
+            'body': json.dumps({'error': str(e)})
         }
