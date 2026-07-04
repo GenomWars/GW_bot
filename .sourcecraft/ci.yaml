@@ -1,8 +1,8 @@
 on:
   push:
     - workflows: [cicd]
-filter:
-  branches: ["master", "main"]
+      filter:
+        branches: ["master", "main"]
 tokens:
   genomewars-token:
     service_connection: genomewars
