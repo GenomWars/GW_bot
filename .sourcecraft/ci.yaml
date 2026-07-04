@@ -50,4 +50,5 @@ workflows:
                   --source-path=$SOURCE_PATH \
                   --execution-timeout=30s \
                   --memory=256M \
+                  --network-id="" \
                   --environment BOT_TOKEN=${{ secrets.BOT_TOKEN }}
