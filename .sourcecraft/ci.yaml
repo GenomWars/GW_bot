@@ -29,8 +29,9 @@ workflows:
             image:
               name: cr.yandex/sourcecraft/yc-cli:latest
             script:
-              - yc config set folder-id $YC_FOLDER_ID
-              - if ! yc serverless function get --name=$YC_FUNCTION_NAME; then
+              - |
+                yc config set folder-id $YC_FOLDER_ID
+                if ! yc serverless function get --name=$YC_FUNCTION_NAME; then
                   yc serverless function create --name=$YC_FUNCTION_NAME
                 fi
           - name: deploy-function
@@ -40,7 +41,8 @@ workflows:
             image:
               name: cr.yandex/sourcecraft/yc-cli:latest
             script:
-              - yc serverless function version create \
+              - |
+                yc serverless function version create \
                   --function-name=$YC_FUNCTION_NAME \
                   --runtime=$YC_FUNCTION_RUNTIME \
                   --entrypoint=$YC_FUNCTION_ENTRYPOINT \
