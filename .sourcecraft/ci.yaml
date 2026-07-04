@@ -14,8 +14,8 @@ workflows:
         env:
           SOURCE_PATH: "./"
           YC_FUNCTION_NAME: "genomewars"
-          YC_FUNCTION_RUNTIME: "nodejs18"  # или python312, в зависимости от вашего кода
-          YC_FUNCTION_ENTRYPOINT: "index.handler"
+          YC_FUNCTION_RUNTIME: "python311"  # или python312, в зависимости от вашего кода
+          YC_FUNCTION_ENTRYPOINT: "bot.main"
         cubes:
           - name: get-iam-token
             env:
