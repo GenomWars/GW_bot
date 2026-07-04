@@ -1,31 +1,19 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-*.egg-info/
-dist/
-build/
-*.egg
-
-# Virtual environment
+# Виртуальное окружение
 .venv/
 venv/
 env/
-
-# Environment variables
+# Файлы Python
+__pycache__/
+*.pyc
+*.pyo
+# База данных
+*.db
+*.db-journal
+# Файлы окружения
 .env
-
+.env.local
 # IDE
 .vscode/
 .idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Data files (if any are generated)
-data/*.db
-data/*.sqlite
+# Логи
+*.log
