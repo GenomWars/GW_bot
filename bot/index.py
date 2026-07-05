@@ -31,30 +31,40 @@ dp.include_router(game_router)
 _last_update_id = 0
 
 
-async def process_updates():
-    """Получает новые сообщения из Telegram через long polling и обрабатывает их."""
+async def long_poll():
+    """Долгий long polling — ждём сообщения до 25 секунд."""
     global _last_update_id
 
-    try:
-        # Получаем обновления от Telegram (исходящее соединение — работает!)
-        offset = _last_update_id + 1 if _last_update_id else None
-        updates = await bot.get_updates(
-            offset=offset,
-            timeout=10,
-            allowed_updates=["message", "callback_query"]
-        )
+    total_processed = 0
+    start_time = asyncio.get_event_loop().time()
 
-        for update in updates:
-            update_id = update.update_id
-            if update_id > _last_update_id:
-                _last_update_id = update_id
-                logger.info(f"Получено обновление: {update_id}")
-                await dp.feed_update(bot, update)
+    # Делаем несколько циклов, пока не выйдет время
+    while asyncio.get_event_loop().time() - start_time < 25:
+        try:
+            offset = _last_update_id + 1 if _last_update_id else None
+            updates = await bot.get_updates(
+                offset=offset,
+                timeout=15,  # Ждём новые сообщения до 15 секунд
+                allowed_updates=["message", "callback_query"]
+            )
 
-        return len(updates)
-    except Exception as e:
-        logger.error(f"Ошибка при получении обновлений: {e}")
-        return 0
+            for update in updates:
+                update_id = update.update_id
+                if update_id > _last_update_id:
+                    _last_update_id = update_id
+                    logger.info(f"Получено обновление: {update_id}")
+                    await dp.feed_update(bot, update)
+                    total_processed += 1
+
+            # Если сообщений нет — выходим, чтобы не тратить время
+            if not updates:
+                break
+
+        except Exception as e:
+            logger.error(f"Ошибка при получении обновлений: {e}")
+            break
+
+    return total_processed
 
 
 # Функция-обработчик для Yandex Cloud Functions
@@ -62,7 +72,7 @@ async def handler(event, context):
     """
     Точка входа для Yandex Cloud Functions.
     При вызове по HTTP (GET) — проверка работоспособности.
-    При вызове по триггеру — long polling.
+    При вызове по триггеру — долгий long polling.
     """
     try:
         # GET-запрос — просто проверка работоспособности
@@ -72,14 +82,11 @@ async def handler(event, context):
                 'body': json.dumps({'status': 'ok', 'message': 'Bot is running'})
             }
 
-        # Проверка на вызов от Timer Trigger
-        # Timer Trigger отправляет POST с телом {"messages": [...]}
-        # или просто пустой запрос
+        # Проверка на сообщение от Telegram (на случай если вебхук ещё активен)
         body = event.get('body', '')
         if body:
             try:
                 body_data = json.loads(body)
-                # Если это сообщение от Telegram (вебхук) — обрабатываем
                 if 'update_id' in body_data:
                     update = Update(**body_data)
                     await dp.feed_update(bot, update)
@@ -90,9 +97,10 @@ async def handler(event, context):
             except json.JSONDecodeError:
                 pass
 
-        # Long polling: получаем новые сообщения из Telegram
-        processed = await process_updates()
-        logger.info(f"Обработано обновлений: {processed}")
+        # Долгий long polling — ждём сообщения до 25 секунд
+        processed = await long_poll()
+        if processed:
+            logger.info(f"Обработано обновлений: {processed}")
 
         return {
             'statusCode': 200,
