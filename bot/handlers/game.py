@@ -27,7 +27,7 @@ async def callback_choose_kingdom(callback: types.CallbackQuery):
     if not game['is_player_turn']:
         bot_turn(game)
         game['bot_moved_this_round'] = True
-        # После хода бота передаём ход игроку
+        # После ��ода бота передаём ход игроку
         game['is_first_turn_of_game'] = False
         start_player_turn(game)
     
@@ -109,22 +109,22 @@ async def callback_place_slot(callback: types.CallbackQuery):
 
 @game_router.callback_query(lambda c: c.data == "action_attack")
 async def callback_attack(callback: types.CallbackQuery):
-    """Обработчик атаки"""
+    """Обработчик атаки из экотона"""
     
     game = load_game(callback.from_user.id)
     if not game:
         await callback.answer("Игра не найдена!")
         return
     
-    # Ищем первую карту в экотоне для атаки
+    # Ищем первую карту игрока в общем экотоне для атаки
     attacker_slot = None
-    for i, card in enumerate(game['player_field']['lbs']):
-        if card is not None:
+    for i, slot_data in enumerate(game['ecotone']):
+        if slot_data and slot_data['owner'] == 'player':
             attacker_slot = i
             break
     
     if attacker_slot is None:
-        await callback.answer("❌ Нет существ в экотоне для атаки!")
+        await callback.answer("❌ Нет твоих существ в экотоне для атаки!")
         return
     
     # Атакуем планету противника

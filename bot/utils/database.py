@@ -45,6 +45,7 @@ def init_database():
             bot_hand TEXT NOT NULL,
             player_field TEXT NOT NULL,
             bot_field TEXT NOT NULL,
+            ecotone TEXT DEFAULT '[]',
             player_planet_health INTEGER DEFAULT 10,
             bot_planet_health INTEGER DEFAULT 10,
             round_number INTEGER DEFAULT 1,
@@ -73,6 +74,7 @@ def save_game(user_id: int, game_state: Dict[str, Any]):
                 player_deck = ?, bot_deck = ?,
                 player_hand = ?, bot_hand = ?,
                 player_field = ?, bot_field = ?,
+                ecotone = ?,
                 player_planet_health = ?, bot_planet_health = ?,
                 round_number = ?, current_atp = ?,
                 is_player_turn = ?, game_over = ?, log = ?
@@ -86,6 +88,7 @@ def save_game(user_id: int, game_state: Dict[str, Any]):
             json.dumps(game_state['bot_hand']),
             json.dumps(game_state['player_field']),
             json.dumps(game_state['bot_field']),
+            json.dumps(game_state.get('ecotone', [])),
             game_state['player_planet_health'],
             game_state['bot_planet_health'],
             game_state['round_number'],
@@ -100,10 +103,10 @@ def save_game(user_id: int, game_state: Dict[str, Any]):
             INSERT INTO games (
                 user_id, player_kingdom, bot_kingdom,
                 player_deck, bot_deck, player_hand, bot_hand,
-                player_field, bot_field,
+                player_field, bot_field, ecotone,
                 player_planet_health, bot_planet_health,
                 round_number, current_atp, is_player_turn, game_over, log
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             user_id,
             game_state['player_kingdom'],
@@ -114,6 +117,7 @@ def save_game(user_id: int, game_state: Dict[str, Any]):
             json.dumps(game_state['bot_hand']),
             json.dumps(game_state['player_field']),
             json.dumps(game_state['bot_field']),
+            json.dumps(game_state.get('ecotone', [])),
             game_state['player_planet_health'],
             game_state['bot_planet_health'],
             game_state['round_number'],
@@ -147,6 +151,7 @@ def load_game(user_id: int) -> Optional[Dict[str, Any]]:
         'bot_hand': json.loads(row['bot_hand']),
         'player_field': json.loads(row['player_field']),
         'bot_field': json.loads(row['bot_field']),
+        'ecotone': json.loads(row['ecotone']) if row.get('ecotone') else [],
         'player_planet_health': row['player_planet_health'],
         'bot_planet_health': row['bot_planet_health'],
         'round_number': row['round_number'],

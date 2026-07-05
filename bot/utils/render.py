@@ -60,12 +60,28 @@ def render_hp_bar(current: int, max_hp: int = STARTING_HP) -> str:
     return f"{filled}{empty}"
 
 
+def render_ecotone_owner(ecotone: List) -> str:
+    """Определение владельца экотона для отображения"""
+    has_player = any(slot and slot['owner'] == 'player' for slot in ecotone)
+    has_bot = any(slot and slot['owner'] == 'bot' for slot in ecotone)
+    
+    if has_player and has_bot:
+        return "⚔️ СМЕШАННЫЙ"
+    elif has_player:
+        return "👤 ТВОЙ"
+    elif has_bot:
+        return "🤖 ПРОТИВНИКА"
+    else:
+        return "⚔️ СПОРНЫЙ"
+
+
 def render_field(game: Dict[str, Any], user_id: int) -> str:
     """Отрисовка игрового поля"""
     
     is_player_turn = game.get('is_player_turn', True)
-    player_field = game.get('player_field', {'back': [], 'lbs': []})
-    bot_field = game.get('bot_field', {'back': [], 'lbs': []})
+    player_field = game.get('player_field', {'back': []})
+    bot_field = game.get('bot_field', {'back': []})
+    ecotone = game.get('ecotone', [])
     player_hand = game.get('player_hand', [])
     
     lines = []
@@ -89,13 +105,15 @@ def render_field(game: Dict[str, Any], user_id: int) -> str:
             lines.append(f"  [{i+1}] ⬜")
     lines.append("")
     
-    # Экотон (горизонтально)
-    lines.append("⚔️ ЭКОТОН:")
-    lbs = player_field.get('lbs', [])
+    # Экотон (общий, горизонтально)
+    eco_owner = render_ecotone_owner(ecotone)
+    lines.append(f"⚔️ ЭКОТОН ({eco_owner}):")
     eco_parts = []
     for i in range(MAX_LBS):
-        if i < len(lbs) and lbs[i]:
-            eco_parts.append(f"[{i+1}] {render_card_short(lbs[i])}")
+        if i < len(ecotone) and ecotone[i]:
+            slot_data = ecotone[i]
+            owner_icon = "👤" if slot_data['owner'] == 'player' else "🤖"
+            eco_parts.append(f"[{i+1}] {owner_icon} {render_card_short(slot_data['card'])}")
         else:
             eco_parts.append(f"[{i+1}] ⬜")
     lines.append("  " + " | ".join(eco_parts))

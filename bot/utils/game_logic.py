@@ -10,10 +10,9 @@ from bot.utils.cards import create_deck, shuffle_deck, draw_card
 
 
 def create_empty_field() -> Dict[str, List]:
-    """Создание пустого поля"""
+    """Создание пустого поля (только место обитания, без экотона)"""
     return {
         'back': [None] * MAX_BACK_ROW,
-        'lbs': [None] * MAX_LBS,
     }
 
 
@@ -78,6 +77,7 @@ def init_game(player_kingdom: str) -> Dict[str, Any]:
         'bot_hand': bot_hand,
         'player_field': player_field,
         'bot_field': bot_field,
+        'ecotone': [None] * MAX_LBS,  # общий экотон: None или {'owner': 'player'/'bot', 'card': card}
         'player_planet_health': STARTING_HP,
         'bot_planet_health': STARTING_HP,
         'round_number': 1,
@@ -88,6 +88,19 @@ def init_game(player_kingdom: str) -> Dict[str, Any]:
         'game_over': False,
         'log': ['🧬 Игра начата!', first_turn_text],
     }
+
+
+def can_occupy_ecotone(ecotone: List, owner: str) -> bool:
+    """Проверка, может ли игрок занять экотон"""
+    # Если в экотоне есть хоть одно существо этого владельца — может
+    for slot in ecotone:
+        if slot and slot['owner'] == owner:
+            return True
+    # Если экотон пуст — может (спорный)
+    if all(slot is None for slot in ecotone):
+        return True
+    # Иначе — экотон занят противником
+    return False
 
 
 def start_player_turn(game: Dict[str, Any]) -> Dict[str, Any]:
@@ -176,7 +189,7 @@ def place_card_on_field(
 
 
 def move_to_ecotone(game: Dict[str, Any], slot: int) -> Dict[str, Any]:
-    """Перемещение существа из МО в экотон"""
+    """Перемещение существа из МО в общий экотон"""
     
     if game['current_atp'] < 1:
         return game
@@ -188,9 +201,14 @@ def move_to_ecotone(game: Dict[str, Any], slot: int) -> Dict[str, Any]:
     if not card or card.get('is_planet'):
         return game
     
+    # Проверка, может ли игрок занять экотон
+    if not can_occupy_ecotone(game['ecotone'], 'player'):
+        game['log'].append("⛔ Экотон занят противником!")
+        return game
+    
     # Проверяем, есть ли свободный слот в экотоне
     free_slot = None
-    for i, s in enumerate(game['player_field']['lbs']):
+    for i, s in enumerate(game['ecotone']):
         if s is None:
             free_slot = i
             break
@@ -199,7 +217,7 @@ def move_to_ecotone(game: Dict[str, Any], slot: int) -> Dict[str, Any]:
         return game
     
     game['player_field']['back'][slot] = None
-    game['player_field']['lbs'][free_slot] = card
+    game['ecotone'][free_slot] = {'owner': 'player', 'card': card}
     game['current_atp'] -= 1
     game['log'].append(f"🚀 {card['emoji']} {card['name']} перешёл в экотон")
     
@@ -212,19 +230,21 @@ def perform_attack(
     target_type: str,
     target_slot: int = None
 ) -> Dict[str, Any]:
-    """Выполнение атаки"""
+    """Выполнение атаки из общего экотона"""
     
-    # Находим атакующего
-    attacker = game['player_field']['lbs'][attacker_slot]
-    if not attacker:
+    # Находим атакующего в общем экотоне
+    eco_slot = game['ecotone'][attacker_slot]
+    if not eco_slot or eco_slot['owner'] != 'player':
         return game
+    
+    attacker = eco_slot['card']
     
     if game['current_atp'] < 1:
         return game
     
     # Проверка дистанционной атаки
     is_ranged = 'Дистанционная атака' in attacker.get('keywords', '')
-    if not is_ranged and not game['player_field']['lbs'][attacker_slot]:
+    if not is_ranged:
         return game
     
     # Выбор цели
@@ -284,7 +304,7 @@ def bot_turn(game: Dict[str, Any]) -> Dict[str, Any]:
     # Даём боту АТФ = номер раунда
     game['current_atp'] = game['round_number']
     
-    # Постановка карты
+    # Постановка карты на поле
     placed = False
     for i, card in enumerate(game['bot_hand']):
         if game['current_atp'] >= card.get('cost', 1):
@@ -299,10 +319,25 @@ def bot_turn(game: Dict[str, Any]) -> Dict[str, Any]:
             if placed:
                 break
     
-    # Атака
-    for i, card in enumerate(game['bot_field']['lbs']):
-        if card and game['current_atp'] >= 1:
-            # Атакуем планету
+    # Перемещение в экотон (если может занять)
+    if can_occupy_ecotone(game['ecotone'], 'bot'):
+        for slot in range(MAX_BACK_ROW):
+            card = game['bot_field']['back'][slot]
+            if card and not card.get('is_planet') and game['current_atp'] >= 1:
+                # Ищем свободный слот в экотоне
+                for i, s in enumerate(game['ecotone']):
+                    if s is None:
+                        game['bot_field']['back'][slot] = None
+                        game['ecotone'][i] = {'owner': 'bot', 'card': card}
+                        game['current_atp'] -= 1
+                        game['log'].append(f"🤖 Противник переместил {card['emoji']} {card['name']} в экотон")
+                        break
+                break
+    
+    # Атака из экотона
+    for i, slot in enumerate(game['ecotone']):
+        if slot and slot['owner'] == 'bot' and game['current_atp'] >= 1:
+            card = slot['card']
             damage = max(0, card.get('attack', 0))
             game['player_planet_health'] = max(0, game['player_planet_health'] - damage)
             game['log'].append(f"🤖 {card['emoji']} {card['name']} атакует планету! -{damage} HP")
