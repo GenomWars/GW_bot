@@ -2,6 +2,9 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from typing import Dict, Any
 from bot.config import MAX_BACK_ROW
+from bot.utils.render import render_card_short
+
+
 def create_game_keyboard(game: Dict[str, Any]) -> InlineKeyboardMarkup:
     """Создание клавиатуры для игры"""
     
@@ -21,9 +24,13 @@ def create_game_keyboard(game: Dict[str, Any]) -> InlineKeyboardMarkup:
     
     # Кнопки для карт в руке
     for i, card in enumerate(game.get('player_hand', [])):
+        card_text = render_card_short(card)
+        # Telegram кнопки ограничены 64 символами, обрезаем если нужно
+        if len(card_text) > 64:
+            card_text = f"{card['emoji']} {card['name']} ({card['cost']}🧪|{card.get('move_cost',1)}👣)"
         keyboard.append([
             InlineKeyboardButton(
-                text=f"🃏 {card['emoji']} {card['name']} ({card['cost']} 🧪 | {card.get('move_cost', 1)} 👣)",
+                text=f"🃏 {card_text}",
                 callback_data=f"play_card_{i}"
             )
         ])
@@ -39,6 +46,8 @@ def create_game_keyboard(game: Dict[str, Any]) -> InlineKeyboardMarkup:
     ])
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
 def create_slot_keyboard(action: str, card_index: int) -> InlineKeyboardMarkup:
     """Клавиатура для выбора слота"""
     

@@ -41,6 +41,7 @@ def render_card_short(card: Dict[str, Any]) -> str:
     attack = card.get('attack', 0)
     health = card.get('health', 0)
     armor = card.get('armor', 0)
+    cost = card.get('cost', 0)
     move_cost = card.get('move_cost', 1)
     
     keywords = card.get('keywords', '')
@@ -49,9 +50,12 @@ def render_card_short(card: Dict[str, Any]) -> str:
         if kw in keywords:
             kw_icons += f' {icon}'
     
-    armor_str = f'/{armor}' if armor > 0 else ''
+    # Характеристики: атака и ХП всегда, броня — только если > 0
+    stats = f"{attack} ⚔️ | {health} ❤️"
+    if armor > 0:
+        stats += f" | {armor} 🛡️"
     
-    return f"{kingdom_symbol} {rarity_color} {name} ({attack}/{health}{armor_str}){kw_icons} {move_cost}👣"
+    return f"{kingdom_symbol} {rarity_color} {name} ({stats}){kw_icons} — {cost} 🧪 | {move_cost} 👣"
 
 
 def render_hp_bar(current: int, max_hp: int = STARTING_HP) -> str:
@@ -137,24 +141,7 @@ def render_field(game: Dict[str, Any], user_id: int) -> str:
     # Рука игрока
     lines.append("📋 ТВОЯ РУКА:")
     for i, card in enumerate(player_hand):
-        rarity_color = render_rarity_color(card.get('rarity', 'Common'))
-        kingdom_symbol = render_kingdom_symbol(card.get('kingdom', ''))
-        name = card.get('name', 'Карта')
-        attack = card.get('attack', 0)
-        health = card.get('health', 0)
-        armor = card.get('armor', 0)
-        cost = card.get('cost', 0)
-        move_cost = card.get('move_cost', 1)
-        keywords = card.get('keywords', '')
-        
-        kw_icons = ''
-        for kw, icon in KEYWORD_ICONS.items():
-            if kw in keywords:
-                kw_icons += f' {icon}'
-        
-        armor_str = f'/{armor}' if armor > 0 else ''
-        
-        lines.append(f"  [{i+1}] {kingdom_symbol} {rarity_color} {name} ({attack}/{health}{armor_str}){kw_icons} — {cost} 🧪 | {move_cost} 👣")
+        lines.append(f"  [{i+1}] {render_card_short(card)}")
     lines.append("")
     
     # Лог
