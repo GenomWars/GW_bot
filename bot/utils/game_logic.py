@@ -1,24 +1,20 @@
-def start_player_turn(game: Dict[str, Any]) -> Dict[str, Any]:
-    """Подготовка хода игрока: добор карты и получение АТФ"""
+def apply_deck_exhaustion_damage(game: Dict[str, Any], target: str) -> Dict[str, Any]:
+    """Нанесение урона от истощения колоды по арифметической прогрессии.
+    Если колода игрока пуста — его планета получает урон 1, 2, 3..."""
     
-    is_first = game.get('is_first_turn_of_game', False)
-    player_goes_first = game.get('player_goes_first', True)
-    
-    # Если это первый ход игры и игрок ходит первым — не добираем карту
-    if not (is_first and player_goes_first):
-        old_hand_size = len(game['player_hand'])
-        game['player_deck'], game['player_hand'], discarded = draw_card_with_limit(
-            game['player_deck'], game['player_hand'], 'игрок'
-        )
-        if discarded:
-            game['log'].append(f"💥 Рука полна! {discarded['emoji']} {discarded['name']} сброшена")
-        elif len(game['player_hand']) > old_hand_size:
-            # Карта успешно добавлена в руку
-            card = game['player_hand'][-1]
-            game['log'].append(f"🃏 Ты добрал карту: {card['emoji']} {card['name']}")
-    
-    # Даём АТФ = номер раунда
-    game['current_atp'] = game['round_number']
-    game['is_player_turn'] = True
+    if target == 'player':
+        # Проверяем колоду игрока — если пуста, урон планете игрока
+        if not game['player_deck']:
+            game['player_deck_empty_rounds'] = game.get('player_deck_empty_rounds', 0) + 1
+            damage = game['player_deck_empty_rounds']
+            game['player_planet_health'] = max(0, game['player_planet_health'] - damage)
+            game['log'].append(f"💀 Твоя колода пуста! Планета получает {damage} урона")
+    elif target == 'bot':
+        # Проверяем колоду бота — если пуста, урон планете бота
+        if not game['bot_deck']:
+            game['bot_deck_empty_rounds'] = game.get('bot_deck_empty_rounds', 0) + 1
+            damage = game['bot_deck_empty_rounds']
+            game['bot_planet_health'] = max(0, game['bot_planet_health'] - damage)
+            game['log'].append(f"💀 Колода противника пуста! Его планета получает {damage} урона")
     
     return game

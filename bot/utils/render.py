@@ -88,12 +88,15 @@ def render_field(game: Dict[str, Any], user_id: int) -> str:
     bot_field = game.get('bot_field', {'back': []})
     ecotone = game.get('ecotone', [])
     player_hand = game.get('player_hand', [])
+    player_deck = game.get('player_deck', [])
+    bot_deck = game.get('bot_deck', [])
     
     lines = []
     
     # Заголовок
     turn_str = "👤 Твой ход" if is_player_turn else "⏳ Ход противника"
     lines.append(f"🧬 ГЕНОМНЫЕ ВОЙНЫ — Раунд {game.get('round_number', 1)} | 🧪 Мутагены: {game.get('current_atp', 1)} | {turn_str}")
+    lines.append(f"📚 Колода: {len(player_deck)} | Противник: {len(bot_deck)}")
     lines.append("")
     
     # Место Обитания противника (4 слота)

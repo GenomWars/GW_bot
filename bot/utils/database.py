@@ -53,6 +53,8 @@ def init_database():
             is_player_turn INTEGER DEFAULT 1,
             game_over INTEGER DEFAULT 0,
             log TEXT DEFAULT '[]',
+            player_deck_empty_rounds INTEGER DEFAULT 0,
+            bot_deck_empty_rounds INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -77,7 +79,8 @@ def save_game(user_id: int, game_state: Dict[str, Any]):
                 ecotone = ?,
                 player_planet_health = ?, bot_planet_health = ?,
                 round_number = ?, current_atp = ?,
-                is_player_turn = ?, game_over = ?, log = ?
+                is_player_turn = ?, game_over = ?, log = ?,
+                player_deck_empty_rounds = ?, bot_deck_empty_rounds = ?
             WHERE user_id = ? AND game_over = 0
         ''', (
             game_state['player_kingdom'],
@@ -96,6 +99,8 @@ def save_game(user_id: int, game_state: Dict[str, Any]):
             1 if game_state['is_player_turn'] else 0,
             1 if game_state['game_over'] else 0,
             json.dumps(game_state.get('log', [])),
+            game_state.get('player_deck_empty_rounds', 0),
+            game_state.get('bot_deck_empty_rounds', 0),
             user_id
         ))
     else:
@@ -105,8 +110,9 @@ def save_game(user_id: int, game_state: Dict[str, Any]):
                 player_deck, bot_deck, player_hand, bot_hand,
                 player_field, bot_field, ecotone,
                 player_planet_health, bot_planet_health,
-                round_number, current_atp, is_player_turn, game_over, log
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                round_number, current_atp, is_player_turn, game_over, log,
+                player_deck_empty_rounds, bot_deck_empty_rounds
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             user_id,
             game_state['player_kingdom'],
@@ -124,7 +130,9 @@ def save_game(user_id: int, game_state: Dict[str, Any]):
             game_state['current_atp'],
             1 if game_state['is_player_turn'] else 0,
             1 if game_state['game_over'] else 0,
-            json.dumps(game_state.get('log', []))
+            json.dumps(game_state.get('log', [])),
+            game_state.get('player_deck_empty_rounds', 0),
+            game_state.get('bot_deck_empty_rounds', 0)
         ))
     
     conn.commit()
@@ -159,6 +167,8 @@ def load_game(user_id: int) -> Optional[Dict[str, Any]]:
         'is_player_turn': bool(row['is_player_turn']),
         'game_over': bool(row['game_over']),
         'log': json.loads(row['log']),
+        'player_deck_empty_rounds': row.get('player_deck_empty_rounds', 0),
+        'bot_deck_empty_rounds': row.get('bot_deck_empty_rounds', 0),
     }
 def delete_game(user_id: int):
     """Удаление игры"""
