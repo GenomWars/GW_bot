@@ -7,12 +7,16 @@ from bot.config import (
     MAX_BACK_ROW, MAX_LBS, PLANET_SLOT
 )
 from bot.utils.cards import create_deck, shuffle_deck, draw_card
+
+
 def create_empty_field() -> Dict[str, List]:
     """Создание пустого поля"""
     return {
         'back': [None] * MAX_BACK_ROW,
         'lbs': [None] * MAX_LBS,
     }
+
+
 def init_game(player_kingdom: str) -> Dict[str, Any]:
     """Инициализация новой игры"""
     
@@ -24,18 +28,37 @@ def init_game(player_kingdom: str) -> Dict[str, Any]:
     bot_deck = create_deck(bot_kingdom)
     shuffle_deck(bot_deck)
     
-    # Раздаём по 4 карты
-    player_hand = []
-    for _ in range(MAX_HAND_SIZE):
-        card, player_deck = draw_card(player_deck)
-        if card:
-            player_hand.append(card)
+    # Случайный выбор первого ходящего
+    player_goes_first = random.choice([True, False])
     
-    bot_hand = []
-    for _ in range(MAX_HAND_SIZE):
-        card, bot_deck = draw_card(bot_deck)
-        if card:
-            bot_hand.append(card)
+    # Первый игрок получает 3 карты, второй — 4
+    first_hand_size = 3
+    second_hand_size = 4
+    
+    if player_goes_first:
+        player_hand = []
+        for _ in range(first_hand_size):
+            card, player_deck = draw_card(player_deck)
+            if card:
+                player_hand.append(card)
+        
+        bot_hand = []
+        for _ in range(second_hand_size):
+            card, bot_deck = draw_card(bot_deck)
+            if card:
+                bot_hand.append(card)
+    else:
+        player_hand = []
+        for _ in range(second_hand_size):
+            card, player_deck = draw_card(player_deck)
+            if card:
+                player_hand.append(card)
+        
+        bot_hand = []
+        for _ in range(first_hand_size):
+            card, bot_deck = draw_card(bot_deck)
+            if card:
+                bot_hand.append(card)
     
     # Создаём поле с планетой в слоте 3
     player_field = create_empty_field()
@@ -43,6 +66,8 @@ def init_game(player_kingdom: str) -> Dict[str, Any]:
     
     bot_field = create_empty_field()
     bot_field['back'][PLANET_SLOT - 1] = {'is_planet': True, 'health': STARTING_HP}
+    
+    first_turn_text = "Твой ход!" if player_goes_first else "Противник ходит первым..."
     
     return {
         'player_kingdom': player_kingdom,
@@ -57,16 +82,42 @@ def init_game(player_kingdom: str) -> Dict[str, Any]:
         'bot_planet_health': STARTING_HP,
         'round_number': 1,
         'current_atp': 1,
-        'is_player_turn': True,
+        'is_player_turn': player_goes_first,
+        'is_first_turn_of_game': True,
         'game_over': False,
-        'log': ['🧬 Игра начата!'],
+        'log': ['🧬 Игра начата!', first_turn_text],
     }
+
+
+def start_player_turn(game: Dict[str, Any]) -> Dict[str, Any]:
+    """Подготовка хода игрока: добор карты и получение АТФ"""
+    
+    is_first = game.get('is_first_turn_of_game', False)
+    player_goes_first = game.get('player_goes_first', True)
+    
+    # Если это первый ход игры и игрок ходит первым — не добираем карту
+    if not (is_first and player_goes_first):
+        if game['player_deck']:
+            card, game['player_deck'] = draw_card(game['player_deck'])
+            if card:
+                game['player_hand'].append(card)
+                game['log'].append(f"🃏 Ты добрал карту: {card['emoji']} {card['name']}")
+    
+    # Даём АТФ = номер раунда
+    game['current_atp'] = game['round_number']
+    game['is_player_turn'] = True
+    
+    return game
+
+
 def get_planet_slot(field: Dict) -> int:
     """Получение слота, где находится планета"""
     for i, slot in enumerate(field['back']):
         if slot and slot.get('is_planet'):
             return i
     return PLANET_SLOT - 1
+
+
 def place_card_on_field(
     game: Dict[str, Any], 
     card_index: int, 
@@ -121,6 +172,8 @@ def place_card_on_field(
         game['player_hand'].insert(card_index, card)
     
     return game
+
+
 def move_to_ecotone(game: Dict[str, Any], slot: int) -> Dict[str, Any]:
     """Перемещение существа из МО в экотон"""
     
@@ -150,6 +203,8 @@ def move_to_ecotone(game: Dict[str, Any], slot: int) -> Dict[str, Any]:
     game['log'].append(f"🚀 {card['emoji']} {card['name']} перешёл в экотон")
     
     return game
+
+
 def perform_attack(
     game: Dict[str, Any],
     attacker_slot: int,
@@ -197,6 +252,8 @@ def perform_attack(
     
     game['current_atp'] -= 1
     return game
+
+
 def is_protected(field: Dict, slot: int) -> bool:
     """Проверка, защищена ли цель охраной"""
     # Проверяем соседние слоты
@@ -206,16 +263,25 @@ def is_protected(field: Dict, slot: int) -> bool:
             if card and 'Охрана' in card.get('keywords', ''):
                 return True
     return False
+
+
 def bot_turn(game: Dict[str, Any]) -> Dict[str, Any]:
     """Ход бота"""
     
+    is_first = game.get('is_first_turn_of_game', False)
+    bot_goes_first = not game.get('is_player_turn', True)
+    
     game['log'].append("🤖 Ход противника...")
     
-    # Добор карты
-    if game['bot_deck']:
-        card, game['bot_deck'] = draw_card(game['bot_deck'])
-        if card:
-            game['bot_hand'].append(card)
+    # Если это первый ход игры и бот ходит первым — не добираем карту
+    if not (is_first and bot_goes_first):
+        if game['bot_deck']:
+            card, game['bot_deck'] = draw_card(game['bot_deck'])
+            if card:
+                game['bot_hand'].append(card)
+    
+    # Даём боту АТФ = номер раунда
+    game['current_atp'] = game['round_number']
     
     # Постановка карты
     placed = False
@@ -242,6 +308,10 @@ def bot_turn(game: Dict[str, Any]) -> Dict[str, Any]:
             game['current_atp'] -= 1
             break
     
+    # Если это был первый ход — снимаем флаг
+    if is_first:
+        game['is_first_turn_of_game'] = False
+    
     # Проверка окончания
     if game['player_planet_health'] <= 0:
         game['game_over'] = True
@@ -252,6 +322,8 @@ def bot_turn(game: Dict[str, Any]) -> Dict[str, Any]:
         game['log'].append("🏆 Ты победил! Планета противника уничтожена.")
     
     return game
+
+
 def check_game_over(game: Dict[str, Any]) -> bool:
     """Проверка окончания игры"""
     if game['player_planet_health'] <= 0:

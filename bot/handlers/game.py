@@ -2,7 +2,7 @@
 from aiogram import Router, types
 from aiogram.filters import Command
 from bot.utils.database import load_game, save_game, delete_game
-from bot.utils.game_logic import init_game, place_card_on_field, move_to_ecotone, perform_attack, bot_turn, check_game_over
+from bot.utils.game_logic import init_game, place_card_on_field, move_to_ecotone, perform_attack, bot_turn, check_game_over, start_player_turn
 from bot.utils.render import render_field
 from bot.keyboards.game import create_game_keyboard, create_slot_keyboard
 
@@ -22,6 +22,14 @@ async def callback_choose_kingdom(callback: types.CallbackQuery):
         return
     
     game = init_game(kingdom)
+    
+    # Если бот ходит первым — сразу делаем его ход
+    if not game['is_player_turn']:
+        bot_turn(game)
+        # После хода бота передаём ход игроку
+        game['is_first_turn_of_game'] = False
+        start_player_turn(game)
+    
     save_game(callback.from_user.id, game)
     
     await callback.message.delete()
@@ -107,13 +115,19 @@ async def callback_attack(callback: types.CallbackQuery):
         await callback.answer("Игра не найдена!")
         return
     
-    # Показываем выбор цели для атаки
-    # Упрощённо: атакуем планету противника
-    result = perform_attack(game)
+    # Ищем первую карту в экотоне для атаки
+    attacker_slot = None
+    for i, card in enumerate(game['player_field']['lbs']):
+        if card is not None:
+            attacker_slot = i
+            break
     
-    if result.get("error"):
-        await callback.answer(result["error"])
+    if attacker_slot is None:
+        await callback.answer("❌ Нет существ в экотоне для атаки!")
         return
+    
+    # Атакуем планету противника
+    game = perform_attack(game, attacker_slot, 'planet')
     
     save_game(callback.from_user.id, game)
     
@@ -138,6 +152,10 @@ async def callback_attack(callback: types.CallbackQuery):
         await callback.answer("😵 Вы проиграли!")
         return
     
+    # Начинаем ход игрока
+    start_player_turn(game)
+    save_game(callback.from_user.id, game)
+    
     text = render_field(game, callback.from_user.id)
     keyboard = create_game_keyboard(game)
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
@@ -153,11 +171,29 @@ async def callback_move(callback: types.CallbackQuery):
         await callback.answer("Игра не найдена!")
         return
     
-    result = move_to_ecotone(game)
+    # Показываем выбор существа для перемещения
+    keyboard = create_slot_keyboard("move", 0)
+    await callback.message.edit_text(
+        text="🎯 Выберите слот с существом для перемещения в экотон:",
+        reply_markup=keyboard
+    )
+    await callback.answer()
+
+
+@game_router.callback_query(lambda c: c.data.startswith("move_slot_"))
+async def callback_move_slot(callback: types.CallbackQuery):
+    """Обработчик выбора слота для перемещения в экотон"""
     
-    if result.get("error"):
-        await callback.answer(result["error"])
+    parts = callback.data.split("_")
+    # callback_data = "move_slot_0_2" → ["move", "slot", "0", "2"]
+    slot = int(parts[3])
+    
+    game = load_game(callback.from_user.id)
+    if not game:
+        await callback.answer("Игра не найдена!")
         return
+    
+    game = move_to_ecotone(game, slot)
     
     save_game(callback.from_user.id, game)
     
@@ -176,6 +212,13 @@ async def callback_end_turn(callback: types.CallbackQuery):
         await callback.answer("Игра не найдена!")
         return
     
+    # Снимаем флаг первого хода
+    if game.get('is_first_turn_of_game', False):
+        game['is_first_turn_of_game'] = False
+    
+    # Увеличиваем номер раунда
+    game['round_number'] += 1
+    
     # Ход бота
     bot_turn(game)
     save_game(callback.from_user.id, game)
@@ -187,6 +230,10 @@ async def callback_end_turn(callback: types.CallbackQuery):
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
         await callback.answer("😵 Вы проиграли!")
         return
+    
+    # Начинаем ход игрока (добор карты + АТФ)
+    start_player_turn(game)
+    save_game(callback.from_user.id, game)
     
     text = render_field(game, callback.from_user.id)
     keyboard = create_game_keyboard(game)
