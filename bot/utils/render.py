@@ -87,11 +87,11 @@ def render_field(game: Dict[str, Any], user_id: int) -> str:
         if i < len(bot_back) and bot_back[i]:
             if bot_back[i].get('is_planet'):
                 hp = bot_back[i].get('health', STARTING_HP)
-                lines.append(f"  [Слот {i+1}] 🪐 ПЛАНЕТА ({hp}/{STARTING_HP})")
+                lines.append(f"  [{i+1}] 🪐 ПЛАНЕТА ({hp}/{STARTING_HP})")
             else:
-                lines.append(f"  [Слот {i+1}] {render_card_short(bot_back[i])}")
+                lines.append(f"  [{i+1}] {render_card_short(bot_back[i])}")
         else:
-            lines.append(f"  [Слот {i+1}] ⬜")
+            lines.append(f"  [{i+1}] ⬜")
     lines.append("")
     
     # Экотон (с нумерацией слотов)
@@ -101,9 +101,9 @@ def render_field(game: Dict[str, Any], user_id: int) -> str:
         if i < len(lbs) and lbs[i]:
             card = lbs[i]
             kingdom_symbol = render_kingdom_symbol(card.get('kingdom', ''))
-            lines.append(f"  [Слот {i+1}] {render_card_short(lbs[i])}")
+            lines.append(f"  [{i+1}] {render_card_short(lbs[i])}")
         else:
-            lines.append(f"  [Слот {i+1}] ⬜")
+            lines.append(f"  [{i+1}] ⬜")
     lines.append("")
     
     # МО игрока
@@ -113,11 +113,11 @@ def render_field(game: Dict[str, Any], user_id: int) -> str:
         if i < len(player_back) and player_back[i]:
             if player_back[i].get('is_planet'):
                 hp = game.get('player_planet_health', STARTING_HP)
-                lines.append(f"  [Слот {i+1}] 🌎 ТВОЯ ПЛАНЕТА ({hp}/{STARTING_HP})")
+                lines.append(f"  [{i+1}] 🌎 ТВОЯ ПЛАНЕТА ({hp}/{STARTING_HP})")
             else:
-                lines.append(f"  [Слот {i+1}] {render_card_short(player_back[i])}")
+                lines.append(f"  [{i+1}] {render_card_short(player_back[i])}")
         else:
-            lines.append(f"  [Слот {i+1}] ⬜")
+            lines.append(f"  [{i+1}] ⬜")
     lines.append("")
     
     # Рука игрока
