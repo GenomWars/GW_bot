@@ -26,6 +26,7 @@ async def callback_choose_kingdom(callback: types.CallbackQuery):
     # Если бот ходит первым — сразу делаем его ход
     if not game['is_player_turn']:
         bot_turn(game)
+        game['bot_moved_this_round'] = True
         # После хода бота передаём ход игроку
         game['is_first_turn_of_game'] = False
         start_player_turn(game)
@@ -142,6 +143,7 @@ async def callback_attack(callback: types.CallbackQuery):
     
     # Ход бота
     bot_turn(game)
+    game['bot_moved_this_round'] = True
     save_game(callback.from_user.id, game)
     
     game_over = check_game_over(game)
@@ -216,29 +218,47 @@ async def callback_end_turn(callback: types.CallbackQuery):
     if game.get('is_first_turn_of_game', False):
         game['is_first_turn_of_game'] = False
     
-    # Увеличиваем номер раунда
-    game['round_number'] += 1
-    
-    # Ход бота
-    bot_turn(game)
-    save_game(callback.from_user.id, game)
-    
-    game_over = check_game_over(game)
-    if game_over:
+    if game.get('bot_moved_this_round', False):
+        # Бот уже ходил в этом раунде — игрок ходил вторым
+        # Просто переходим к следующему раунду
+        game['round_number'] += 1
+        game['bot_moved_this_round'] = False
+        
+        # Начинаем ход игрока (добор карты + АТФ)
+        start_player_turn(game)
+        save_game(callback.from_user.id, game)
+        
         text = render_field(game, callback.from_user.id)
         keyboard = create_game_keyboard(game)
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
-        await callback.answer("😵 Вы проиграли!")
-        return
-    
-    # Начинаем ход игрока (добор карты + АТФ)
-    start_player_turn(game)
-    save_game(callback.from_user.id, game)
-    
-    text = render_field(game, callback.from_user.id)
-    keyboard = create_game_keyboard(game)
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
-    await callback.answer("⏭️ Ход завершён!")
+        await callback.answer("⏭️ Раунд завершён!")
+    else:
+        # Бот ещё не ходил — игрок ходил первым
+        # Сначала ход бота
+        bot_turn(game)
+        game['bot_moved_this_round'] = True
+        save_game(callback.from_user.id, game)
+        
+        game_over = check_game_over(game)
+        if game_over:
+            text = render_field(game, callback.from_user.id)
+            keyboard = create_game_keyboard(game)
+            await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+            await callback.answer("😵 Вы проиграли!")
+            return
+        
+        # Переходим к следующему раунду
+        game['round_number'] += 1
+        game['bot_moved_this_round'] = False
+        
+        # Начинаем ход игрока (добор карты + АТФ)
+        start_player_turn(game)
+        save_game(callback.from_user.id, game)
+        
+        text = render_field(game, callback.from_user.id)
+        keyboard = create_game_keyboard(game)
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+        await callback.answer("⏭️ Ход завершён!")
 
 
 @game_router.callback_query(lambda c: c.data == "action_refresh")

@@ -84,6 +84,7 @@ def init_game(player_kingdom: str) -> Dict[str, Any]:
         'current_atp': 1,
         'is_player_turn': player_goes_first,
         'is_first_turn_of_game': True,
+        'bot_moved_this_round': False,
         'game_over': False,
         'log': ['🧬 Игра начата!', first_turn_text],
     }
