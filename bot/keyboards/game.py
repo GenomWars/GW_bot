@@ -23,7 +23,7 @@ def create_game_keyboard(game: Dict[str, Any]) -> InlineKeyboardMarkup:
     for i, card in enumerate(game.get('player_hand', [])):
         keyboard.append([
             InlineKeyboardButton(
-                text=f"🃏 {card['emoji']} {card['name']} ({card['cost']} 🧪)",
+                text=f"🃏 {card['emoji']} {card['name']} ({card['cost']} 🧪 | {card.get('move_cost', 1)} 👣)",
                 callback_data=f"play_card_{i}"
             )
         ])
