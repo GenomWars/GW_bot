@@ -93,9 +93,18 @@ def render_field(game: Dict[str, Any], user_id: int) -> str:
     
     lines = []
     
-    # Заголовок
+    # Заголовок с царствами
+    primary = game.get('player_kingdom', '')
+    secondary = game.get('player_secondary_kingdom', '')
+    p_sym = KINGDOM_SYMBOLS.get(primary, '')
+    s_sym = KINGDOM_SYMBOLS.get(secondary, '')
+    
     turn_str = "👤 Твой ход" if is_player_turn else "⏳ Ход противника"
-    lines.append(f"🧬 ГЕНОМНЫЕ ВОЙНЫ — Раунд {game.get('round_number', 1)} | 🧪 Мутагены: {game.get('current_atp', 1)} | {turn_str}")
+    lines.append(
+        f"🧬 ГЕНОМНЫЕ ВОЙНЫ — Раунд {game.get('round_number', 1)} | "
+        f"🧪 Мутагены: {game.get('current_atp', 1)} | {turn_str}"
+    )
+    lines.append(f"👤 {p_sym}{primary} + {s_sym}{secondary}")
     lines.append(f"📚 Колода: {len(player_deck)} | Противник: {len(bot_deck)}")
     lines.append("")
     

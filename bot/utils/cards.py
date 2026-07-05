@@ -37,13 +37,32 @@ CARDS_DATA = [
 ]
 
 
-def create_deck(kingdom: str) -> List[Dict[str, Any]]:
-    """Создание колоды для указанного царства"""
-    deck = []
+def create_deck(primary_kingdom: str, secondary_kingdom: str) -> List[Dict[str, Any]]:
+    """Создание колоды из основного и второстепенного царств.
+
+    Основное царство:
+      - Common карты: 3 копии каждого вида
+      - Rare карты: 2 копии каждого вида
+    Второстепенное царство:
+      - Common карты: 2 копии каждого вида
+      - Rare карты не включаются
+
+    Всего формируется 24 карты, из которых случайно выбирается 20.
+    """
+    pool = []
+
     for card_template in CARDS_DATA:
-        if card_template['kingdom'] == kingdom:
-            for _ in range(2):
-                deck.append(dict(card_template))
+        if card_template['kingdom'] == primary_kingdom:
+            copies = 3 if card_template['rarity'] == 'Common' else 2
+            for _ in range(copies):
+                pool.append(dict(card_template))
+        elif card_template['kingdom'] == secondary_kingdom:
+            if card_template['rarity'] == 'Common':
+                for _ in range(2):
+                    pool.append(dict(card_template))
+
+    # Из пула в 24 карты случайно выбираем 20
+    deck = random.sample(pool, 20)
     return deck
 
 

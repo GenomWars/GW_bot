@@ -26,25 +26,56 @@ async def cmd_start(message: types.Message):
 
 @start_router.message(Command("newgame"))
 async def cmd_new_game(message: types.Message):
-    """Обработчик команды /newgame — выбор царства"""
+    """Обработчик команды /newgame — выбор основного царства"""
     
-    text = "🌍 <b>Выберите своё царство:</b>"
+    text = "🌍 <b>Выберите ОСНОВНОЕ царство:</b>"
     
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                types.InlineKeyboardButton(text="🐾 Animalia", callback_data="kingdom_Animalia"),
-                types.InlineKeyboardButton(text="🌿 Plantae", callback_data="kingdom_Plantae")
+                types.InlineKeyboardButton(text="🐾 Animalia", callback_data="primary_Animalia"),
+                types.InlineKeyboardButton(text="🌿 Plantae", callback_data="primary_Plantae")
             ],
             [
-                types.InlineKeyboardButton(text="🍄 Fungi", callback_data="kingdom_Fungi"),
-                types.InlineKeyboardButton(text="🦠 Bacteria", callback_data="kingdom_Bacteria")
+                types.InlineKeyboardButton(text="🍄 Fungi", callback_data="primary_Fungi"),
+                types.InlineKeyboardButton(text="🦠 Bacteria", callback_data="primary_Bacteria")
             ],
-            [types.InlineKeyboardButton(text="❌ Отмена", callback_data="cancel")]
+            [types.InlineKeyboardButton(text="❌ Отмена", callback_data="cancel")],
+            [types.InlineKeyboardButton(text="ℹ️ О царствах", callback_data="kingdom_info")]
         ]
     )
     
     await message.answer(text, parse_mode="HTML", reply_markup=keyboard)
+
+
+@start_router.callback_query(lambda c: c.data == "kingdom_info")
+async def callback_kingdom_info(callback: types.CallbackQuery):
+    """Информация о царствах"""
+    
+    text = (
+        "🌍 <b>О царствах</b>\n\n"
+        "Вы выбираете <b>основное</b> и <b>второстепенное</b> царства.\n\n"
+        "🐾 <b>Animalia</b> — сила и хищничество\n"
+        "  • Агрессивные существа с высоким уроном\n\n"
+        "🌿 <b>Plantae</b> — защита и регенерация\n"
+        "  • Крепкая броня и охрана союзников\n\n"
+        "🍄 <b>Fungi</b> — паразитизм и контроль\n"
+        "  • Живучесть и контроль поля\n\n"
+        "🦠 <b>Bacteria</b> — мутации и токсины\n"
+        "  • Дистанционные атаки и яды\n\n"
+        "Основное царство даёт больше карт в колоду.\n"
+        "Второстепенное добавляет разнообразие."
+    )
+    
+    await callback.message.edit_text(text, parse_mode="HTML")
+    await callback.answer()
+
+
+@start_router.callback_query(lambda c: c.data == "cancel")
+async def callback_cancel(callback: types.CallbackQuery):
+    """Отмена выбора"""
+    await callback.message.delete()
+    await callback.answer("❌ Отменено!")
 
 
 @start_router.message(Command("rules"))
@@ -65,7 +96,7 @@ async def cmd_rules(message: types.Message):
         "• Экотон (4 слота) — для атаки\n\n"
         "⚔️ <b>Бой:</b>\n"
         "• Урон = Атака − Броня\n"
-        "• Дистанционная атака — из Места Обитания\n"
+        "• Дистанционная атака — без ответного урона\n"
         "• Охрана — защищает соседей\n\n"
         "Удачи, эволюционер! 🧬"
     )

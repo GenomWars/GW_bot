@@ -9,11 +9,11 @@ from bot.keyboards.game import create_game_keyboard, create_slot_keyboard, creat
 game_router = Router()
 
 
-@game_router.callback_query(lambda c: c.data.startswith("kingdom_"))
-async def callback_choose_kingdom(callback: types.CallbackQuery):
-    """Обработчик выбора царства"""
+@game_router.callback_query(lambda c: c.data.startswith("primary_"))
+async def callback_choose_primary(callback: types.CallbackQuery):
+    """Обработчик выбора основного царства — показываем выбор второстепенного"""
 
-    kingdom = callback.data.replace("kingdom_", "")
+    primary = callback.data.replace("primary_", "")
 
     existing = load_game(callback.from_user.id)
     if existing and not existing.get('game_over', False):
@@ -21,7 +21,43 @@ async def callback_choose_kingdom(callback: types.CallbackQuery):
         await callback.message.answer("⚠️ Закончи текущую игру командой /endgame")
         return
 
-    game = init_game(kingdom)
+    # Показываем выбор второстепенного царства из оставшихся
+    kingdoms = ['Animalia', 'Plantae', 'Fungi', 'Bacteria']
+    available = [k for k in kingdoms if k != primary]
+
+    text = (
+        f"🌍 <b>Основное царство:</b> {primary}\n\n"
+        f"Теперь выберите <b>ВТОРОСТЕПЕННОЕ</b> царство:"
+    )
+
+    keyboard = types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text=f"{'🐾' if k == 'Animalia' else '🌿' if k == 'Plantae' else '🍄' if k == 'Fungi' else '🦠'} {k}",
+                    callback_data=f"secondary_{primary}_{k}"
+                )
+            ]
+            for k in available
+        ] + [[
+            types.InlineKeyboardButton(text="❌ Отмена", callback_data="cancel")
+        ]]
+    )
+
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+    await callback.answer()
+
+
+@game_router.callback_query(lambda c: c.data.startswith("secondary_"))
+async def callback_choose_secondary(callback: types.CallbackQuery):
+    """Обработчик выбора второстепенного царства — запуск игры"""
+
+    parts = callback.data.split("_")
+    # secondary_Animalia_Plantae
+    primary = parts[1]
+    secondary = parts[2]
+
+    game = init_game(primary, secondary)
 
     # Если бот ходит первым — сразу делаем его ход
     if not game['is_player_turn']:
@@ -37,7 +73,7 @@ async def callback_choose_kingdom(callback: types.CallbackQuery):
     text = render_field(game, callback.from_user.id)
     keyboard = create_game_keyboard(game)
 
-    await callback.answer(f"✅ Игра начата! Царство: {kingdom}")
+    await callback.answer(f"✅ Игра начата! {primary} + {secondary}")
     await callback.message.answer(text, parse_mode="HTML", reply_markup=keyboard)
 
 
@@ -129,7 +165,6 @@ async def callback_attack_select_attacker(callback: types.CallbackQuery):
     """Обработчик выбора атакующего — показываем цели"""
 
     parts = callback.data.split("_")
-    # attack_sel_eco_0 или attack_sel_mo_1
     zone = parts[2]  # 'eco' или 'mo'
     slot = int(parts[3])
 
@@ -152,26 +187,8 @@ async def callback_attack_select_attacker(callback: types.CallbackQuery):
 async def callback_attack_execute(callback: types.CallbackQuery):
     """Обработчик выбора цели — выполняем атаку"""
 
-    # Нужно восстановить атакующего из предыдущего шага.
-    # Используем костыль: храним в callback_data атакующего.
-    # Но у нас нет стейта, поэтому переделаем: будем хранить в сообщении.
-    # Решение: callback_data = "attack_tgt_eco_0" — цель,
-    # а атакующий будет последним выбранным.
-    # Но проще: переделаем формат — будем хранить всё в одном callback_data.
-    # Используем новый подход: attack_exec_{zone}_{slot}_{tgt_zone}_{tgt_slot}
-
-    # На самом деле, нам нужно знать атакующего.
-    # Сделаем проще: будем использовать два шага через хранение в game_state.
-    # Но game_state сохраняется в БД, а у нас нет временного поля.
-    # Решение: callback_data цели содержит префикс с зоной атакующего.
-    # Переделаем create_target_keyboard чтобы callback_data содержал атакующего.
-
-    # ПЕРЕДЕЛЫВАЕМ: будем использовать формат
-    # attack_tgt_{att_zone}_{att_slot}_{tgt_zone}_{tgt_slot}
-
     parts = callback.data.split("_")
-    # attack_tgt_mo_0_eco_1
-    # parts = ['attack', 'tgt', 'mo', '0', 'eco', '1']
+    # attack_tgt_eco_0_mo_1
     att_zone = 'ecotone' if parts[2] == 'eco' else 'mo'
     att_slot = int(parts[3])
     tgt_zone = 'mo' if parts[4] == 'mo' else 'ecotone'
@@ -277,7 +294,6 @@ async def callback_end_turn(callback: types.CallbackQuery):
         game['is_first_turn_of_game'] = False
 
     if game.get('bot_moved_this_round', False):
-        # Бот уже ходил в этом раунде — игрок ходил вторым
         game['round_number'] += 1
         game['bot_moved_this_round'] = False
 
@@ -289,7 +305,6 @@ async def callback_end_turn(callback: types.CallbackQuery):
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
         await callback.answer("⏭️ Раунд завершён!")
     else:
-        # Бот ещё не ходил — игрок ходил первым
         bot_turn(game)
         game['bot_moved_this_round'] = True
         save_game(callback.from_user.id, game)

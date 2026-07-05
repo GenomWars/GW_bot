@@ -4,12 +4,16 @@ import json
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from bot.config import DATABASE_PATH
+
+
 def get_db_connection():
     """Получение соединения с базой данных"""
     Path(DATABASE_PATH).parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DATABASE_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+
 def init_database():
     """Инициализация базы данных"""
     conn = get_db_connection()
@@ -38,7 +42,9 @@ def init_database():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
             player_kingdom TEXT NOT NULL,
+            player_secondary_kingdom TEXT DEFAULT '',
             bot_kingdom TEXT NOT NULL,
+            bot_secondary_kingdom TEXT DEFAULT '',
             player_deck TEXT NOT NULL,
             bot_deck TEXT NOT NULL,
             player_hand TEXT NOT NULL,
@@ -59,8 +65,17 @@ def init_database():
         )
     ''')
     
+    # Проверяем, есть ли колонка player_secondary_kingdom (миграция)
+    try:
+        cursor.execute('SELECT player_secondary_kingdom FROM games LIMIT 1')
+    except sqlite3.OperationalError:
+        cursor.execute('ALTER TABLE games ADD COLUMN player_secondary_kingdom TEXT DEFAULT ""')
+        cursor.execute('ALTER TABLE games ADD COLUMN bot_secondary_kingdom TEXT DEFAULT ""')
+    
     conn.commit()
     conn.close()
+
+
 def save_game(user_id: int, game_state: Dict[str, Any]):
     """Сохранение игры"""
     conn = get_db_connection()
@@ -72,7 +87,8 @@ def save_game(user_id: int, game_state: Dict[str, Any]):
     if existing:
         cursor.execute('''
             UPDATE games SET
-                player_kingdom = ?, bot_kingdom = ?,
+                player_kingdom = ?, player_secondary_kingdom = ?,
+                bot_kingdom = ?, bot_secondary_kingdom = ?,
                 player_deck = ?, bot_deck = ?,
                 player_hand = ?, bot_hand = ?,
                 player_field = ?, bot_field = ?,
@@ -84,7 +100,9 @@ def save_game(user_id: int, game_state: Dict[str, Any]):
             WHERE user_id = ? AND game_over = 0
         ''', (
             game_state['player_kingdom'],
+            game_state.get('player_secondary_kingdom', ''),
             game_state['bot_kingdom'],
+            game_state.get('bot_secondary_kingdom', ''),
             json.dumps(game_state['player_deck']),
             json.dumps(game_state['bot_deck']),
             json.dumps(game_state['player_hand']),
@@ -106,17 +124,20 @@ def save_game(user_id: int, game_state: Dict[str, Any]):
     else:
         cursor.execute('''
             INSERT INTO games (
-                user_id, player_kingdom, bot_kingdom,
+                user_id, player_kingdom, player_secondary_kingdom,
+                bot_kingdom, bot_secondary_kingdom,
                 player_deck, bot_deck, player_hand, bot_hand,
                 player_field, bot_field, ecotone,
                 player_planet_health, bot_planet_health,
                 round_number, current_atp, is_player_turn, game_over, log,
                 player_deck_empty_rounds, bot_deck_empty_rounds
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             user_id,
             game_state['player_kingdom'],
+            game_state.get('player_secondary_kingdom', ''),
             game_state['bot_kingdom'],
+            game_state.get('bot_secondary_kingdom', ''),
             json.dumps(game_state['player_deck']),
             json.dumps(game_state['bot_deck']),
             json.dumps(game_state['player_hand']),
@@ -137,6 +158,8 @@ def save_game(user_id: int, game_state: Dict[str, Any]):
     
     conn.commit()
     conn.close()
+
+
 def load_game(user_id: int) -> Optional[Dict[str, Any]]:
     """Загрузка игры"""
     conn = get_db_connection()
@@ -152,7 +175,9 @@ def load_game(user_id: int) -> Optional[Dict[str, Any]]:
     row = dict(row)
     return {
         'player_kingdom': row['player_kingdom'],
+        'player_secondary_kingdom': row.get('player_secondary_kingdom', ''),
         'bot_kingdom': row['bot_kingdom'],
+        'bot_secondary_kingdom': row.get('bot_secondary_kingdom', ''),
         'player_deck': json.loads(row['player_deck']),
         'bot_deck': json.loads(row['bot_deck']),
         'player_hand': json.loads(row['player_hand']),
@@ -170,6 +195,8 @@ def load_game(user_id: int) -> Optional[Dict[str, Any]]:
         'player_deck_empty_rounds': row.get('player_deck_empty_rounds', 0),
         'bot_deck_empty_rounds': row.get('bot_deck_empty_rounds', 0),
     }
+
+
 def delete_game(user_id: int):
     """Удаление игры"""
     conn = get_db_connection()
@@ -178,7 +205,7 @@ def delete_game(user_id: int):
     conn.commit()
     conn.close()
 
+
 def seed_cards():
     """Заполнение таблицы карт начальными данными (заглушка)"""
-    # Карты уже определены в cards.py, функция для будущего расширения
     pass

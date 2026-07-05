@@ -5,16 +5,18 @@ from bot.config import STARTING_HP, MAX_ATP, MAX_BACK_ROW, MAX_LBS, PLANET_SLOT
 from bot.utils.cards import create_deck, shuffle_deck, draw_card
 
 
-def init_game(kingdom: str) -> Dict[str, Any]:
-    """Инициализация новой игры"""
+def init_game(primary_kingdom: str, secondary_kingdom: str) -> Dict[str, Any]:
+    """Инициализация новой игры с основным и второстепенным царством"""
 
-    # Выбор случайного царства для бота (отличного от игрока)
+    # Выбор случайных царств для бота (отличных от игрока и друг от друга)
     kingdoms = ['Animalia', 'Plantae', 'Fungi', 'Bacteria']
-    bot_kingdom = random.choice([k for k in kingdoms if k != kingdom])
+    available = [k for k in kingdoms if k != primary_kingdom and k != secondary_kingdom]
+    bot_primary = random.choice(available)
+    bot_secondary = random.choice([k for k in available if k != bot_primary])
 
     # Создание и перемешивание колод
-    player_deck = create_deck(kingdom)
-    bot_deck = create_deck(bot_kingdom)
+    player_deck = create_deck(primary_kingdom, secondary_kingdom)
+    bot_deck = create_deck(bot_primary, bot_secondary)
     shuffle_deck(player_deck)
     shuffle_deck(bot_deck)
 
@@ -54,8 +56,10 @@ def init_game(kingdom: str) -> Dict[str, Any]:
     is_player_turn = random.choice([True, False])
 
     game = {
-        'player_kingdom': kingdom,
-        'bot_kingdom': bot_kingdom,
+        'player_kingdom': primary_kingdom,
+        'player_secondary_kingdom': secondary_kingdom,
+        'bot_kingdom': bot_primary,
+        'bot_secondary_kingdom': bot_secondary,
         'player_deck': player_deck,
         'bot_deck': bot_deck,
         'player_hand': player_hand,
@@ -387,7 +391,6 @@ def bot_turn(game: Dict[str, Any]) -> Dict[str, Any]:
                         break
 
     # --- Атака ---
-    # Приоритет: сначала атакуем существами из экотона, потом из МО
     attacked = False
 
     # 1. Атака существами из экотона → МО игрока
@@ -396,23 +399,15 @@ def bot_turn(game: Dict[str, Any]) -> Dict[str, Any]:
             break
         slot_data = game['ecotone'][eco_slot]
         if slot_data and slot_data['owner'] == 'bot':
-            creature = slot_data['card']
-            is_ranged = 'Дистанционная атака' in creature.get('keywords', '')
-
-            # Выбираем лучшую цель в МО игрока
             player_back = game['player_field']['back']
-
-            # Проверяем охрану
             guard_slot = _find_guard(player_back)
 
             if guard_slot is not None:
-                # Атакуем охраняющее существо
                 game = perform_attack(
                     game, 'ecotone', eco_slot, 'mo', guard_slot
                 )
                 attacked = True
             else:
-                # Атакуем планету
                 game = perform_attack(
                     game, 'ecotone', eco_slot, 'mo', PLANET_SLOT
                 )
@@ -427,9 +422,6 @@ def bot_turn(game: Dict[str, Any]) -> Dict[str, Any]:
                 continue
             creature = game['bot_field']['back'][slot]
             if creature and not creature.get('is_planet'):
-                is_ranged = 'Дистанционная атака' in creature.get('keywords', '')
-
-                # Ищем цель в экотоне (существо игрока)
                 for eco_slot in range(MAX_LBS):
                     eco_data = game['ecotone'][eco_slot]
                     if eco_data and eco_data['owner'] == 'player':
@@ -439,7 +431,7 @@ def bot_turn(game: Dict[str, Any]) -> Dict[str, Any]:
                         attacked = True
                         break
 
-    # 3. Если не атаковали и есть дистанционные — атакуем МО игрока из МО
+    # 3. Если не атаковали и есть д��станционные — атакуем МО игрока из МО
     if not attacked:
         for slot in range(MAX_BACK_ROW):
             if attacked:
