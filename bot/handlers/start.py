@@ -54,7 +54,7 @@ async def cmd_rules(message: types.Message):
         "📖 <b>Правила игры «ГЕНОМНЫЕ ВОЙНЫ»</b>\n\n"
         "🎯 <b>Цель:</b> Уничтожить планету противника (10 HP).\n\n"
         "⚡ <b>Мутагены:</b>\n"
-        "• В начале хода вы по��учаете Мутагены = номер раунда\n"
+        "• В начале хода вы получаете Мутагены = номер раунда\n"
         "• Неиспользованные Мутагены сгорают\n\n"
         "🃏 <b>Карты:</b>\n"
         "• У вас 20 карт в колоде\n"
@@ -97,9 +97,9 @@ async def cmd_genome(message: types.Message):
     )
 
 
-@start_router.message(Command("clear"))
-async def cmd_clear(message: types.Message):
-    """Обработчик команды /clear — очистка чата"""
+@start_router.message(Command("clean"))
+async def cmd_clean(message: types.Message):
+    """Обработчик команды /clean — очистка чата"""
     await message.delete()
     msg = await message.answer("🧹 Чат очищен!")
     await msg.delete()
