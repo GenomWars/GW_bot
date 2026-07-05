@@ -24,11 +24,6 @@ async def cmd_start(message: types.Message):
     await message.answer(text, parse_mode="HTML")
 
 
-@start_router.message(lambda message: message.text == "🧬 Новая игра")
-async def cmd_new_game_shortcut(message: types.Message):
-    await cmd_new_game(message)
-
-
 @start_router.message(Command("newgame"))
 async def cmd_new_game(message: types.Message):
     """Обработчик команды /newgame — выбор царства"""
@@ -52,12 +47,6 @@ async def cmd_new_game(message: types.Message):
     await message.answer(text, parse_mode="HTML", reply_markup=keyboard)
 
 
-@start_router.message(lambda message: message.text == "📖 Правила")
-async def cmd_rules_shortcut(message: types.Message):
-    """Обработчик кнопки 'Правила'"""
-    await cmd_rules(message)
-
-
 @start_router.message(Command("rules"))
 async def cmd_rules(message: types.Message):
     """Обработчик команды /rules — правила игры"""
@@ -65,18 +54,18 @@ async def cmd_rules(message: types.Message):
         "📖 <b>Правила игры «ГЕНОМНЫЕ ВОЙНЫ»</b>\n\n"
         "🎯 <b>Цель:</b> Уничтожить планету противника (10 HP).\n\n"
         "⚡ <b>Мутагены:</b>\n"
-        "• В начале хода вы получаете Мутагены = номер раунда\n"
+        "• В начале хода вы по��учаете Мутагены = номер раунда\n"
         "• Неиспользованные Мутагены сгорают\n\n"
         "🃏 <b>Карты:</b>\n"
         "• У вас 20 карт в колоде\n"
         "• В начале игры вы получаете 4 карты\n"
         "• Каждый ход вы добираете 1 карту\n\n"
         "🏛️ <b>Поле:</b>\n"
-        "• МО (4 слота) — для защиты\n"
+        "• Место Обитания (4 слота) — для защиты\n"
         "• Экотон (4 слота) — для атаки\n\n"
         "⚔️ <b>Бой:</b>\n"
         "• Урон = Атака − Броня\n"
-        "• Дистанционная атака — из МО\n"
+        "• Дистанционная атака — из Места Обитания\n"
         "• Охрана — защищает соседей\n\n"
         "Удачи, эволюционер! 🧬"
     )

@@ -75,13 +75,8 @@ def render_field(game: Dict[str, Any], user_id: int) -> str:
     lines.append(f"🧬 ГЕНОМНЫЕ ВОЙНЫ — Раунд {game.get('round_number', 1)} | 🧪 Мутагены: {game.get('current_atp', 1)} | {turn_str}")
     lines.append("")
     
-    # Планета противника
-    bot_hp = game.get('bot_planet_health', STARTING_HP)
-    lines.append(f"🪐 ПЛАНЕТА ПРОТИВНИКА: {render_hp_bar(bot_hp)} ({bot_hp}/{STARTING_HP})")
-    lines.append("")
-    
-    # МО противника (4 слота)
-    lines.append("🌿 МО ПРОТИВНИКА:")
+    # Место Обитания противника (4 слота)
+    lines.append("🌿 МЕСТО ОБИТАНИЯ ПРОТИВНИКА:")
     bot_back = bot_field.get('back', [])
     for i in range(MAX_BACK_ROW):
         if i < len(bot_back) and bot_back[i]:
@@ -106,8 +101,8 @@ def render_field(game: Dict[str, Any], user_id: int) -> str:
     lines.append("  " + " | ".join(eco_parts))
     lines.append("")
     
-    # МО игрока
-    lines.append("🌿 ТВОЁ МО:")
+    # Место Обитания игрока
+    lines.append("🌿 ТВОЁ МЕСТО ОБИТАНИЯ:")
     player_back = player_field.get('back', [])
     for i in range(MAX_BACK_ROW):
         if i < len(player_back) and player_back[i]:
