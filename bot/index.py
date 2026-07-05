@@ -1,6 +1,7 @@
 # bot/index.py — корневой файл для Yandex Cloud Functions
 import json
 import logging
+import asyncio
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -26,12 +27,42 @@ dp = Dispatcher()
 dp.include_router(start_router)
 dp.include_router(game_router)
 
+# Хранилище последнего обработанного update_id
+_last_update_id = 0
+
+
+async def process_updates():
+    """Получает новые сообщения из Telegram через long polling и обрабатывает их."""
+    global _last_update_id
+
+    try:
+        # Получаем обновления от Telegram (исходящее соединение — работает!)
+        offset = _last_update_id + 1 if _last_update_id else None
+        updates = await bot.get_updates(
+            offset=offset,
+            timeout=10,
+            allowed_updates=["message", "callback_query"]
+        )
+
+        for update in updates:
+            update_id = update.update_id
+            if update_id > _last_update_id:
+                _last_update_id = update_id
+                logger.info(f"Получено обновление: {update_id}")
+                await dp.feed_update(bot, update)
+
+        return len(updates)
+    except Exception as e:
+        logger.error(f"Ошибка при получении обновлений: {e}")
+        return 0
+
 
 # Функция-обработчик для Yandex Cloud Functions
 async def handler(event, context):
     """
     Точка входа для Yandex Cloud Functions.
-    Принимает HTTP-запрос от Telegram (POST) и передаёт его в aiogram.
+    При вызове по HTTP (GET) — проверка работоспособности.
+    При вызове по триггеру — long polling.
     """
     try:
         # GET-запрос — просто проверка работоспособности
@@ -41,26 +72,31 @@ async def handler(event, context):
                 'body': json.dumps({'status': 'ok', 'message': 'Bot is running'})
             }
 
-        # Парсим тело запроса (Telegram отправляет JSON)
+        # Проверка на вызов от Timer Trigger
+        # Timer Trigger отправляет POST с телом {"messages": [...]}
+        # или просто пустой запрос
         body = event.get('body', '')
-        if not body:
-            return {
-                'statusCode': 200,
-                'body': json.dumps({'status': 'ok'})
-            }
+        if body:
+            try:
+                body_data = json.loads(body)
+                # Если это сообщение от Telegram (вебхук) — обрабатываем
+                if 'update_id' in body_data:
+                    update = Update(**body_data)
+                    await dp.feed_update(bot, update)
+                    return {
+                        'statusCode': 200,
+                        'body': json.dumps({'status': 'ok'})
+                    }
+            except json.JSONDecodeError:
+                pass
 
-        body = json.loads(body)
-        logger.info(f"Получено обновление: {body}")
-
-        # Создаём объект Update
-        update = Update(**body)
-
-        # Передаём обновление в диспетчер
-        await dp.feed_update(bot, update)
+        # Long polling: получаем новые сообщения из Telegram
+        processed = await process_updates()
+        logger.info(f"Обработано обновлений: {processed}")
 
         return {
             'statusCode': 200,
-            'body': json.dumps({'status': 'ok'})
+            'body': json.dumps({'status': 'ok', 'processed': processed})
         }
     except Exception as e:
         logger.error(f"Ошибка: {e}")
