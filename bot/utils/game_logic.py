@@ -5,22 +5,21 @@ from bot.config import STARTING_HP, MAX_ATP, MAX_BACK_ROW, MAX_LBS, PLANET_SLOT
 from bot.utils.cards import create_deck, shuffle_deck, draw_card
 
 
+# ─── ИНИЦИАЛИЗАЦИЯ ИГРЫ ───────────────────────────────────────────────
+
 def init_game(primary_kingdom: str, secondary_kingdom: str) -> Dict[str, Any]:
     """Инициализация новой игры с основным и второстепенным царством"""
 
-    # Выбор случайных царств для бота (отличных от игрока и друг от друга)
     kingdoms = ['Animalia', 'Plantae', 'Fungi', 'Bacteria']
     available = [k for k in kingdoms if k != primary_kingdom and k != secondary_kingdom]
     bot_primary = random.choice(available)
     bot_secondary = random.choice([k for k in available if k != bot_primary])
 
-    # Создание и перемешивание колод
     player_deck = create_deck(primary_kingdom, secondary_kingdom)
     bot_deck = create_deck(bot_primary, bot_secondary)
     shuffle_deck(player_deck)
     shuffle_deck(bot_deck)
 
-    # Раздача начальных карт (по 4)
     player_hand = []
     bot_hand = []
     for _ in range(4):
@@ -31,28 +30,17 @@ def init_game(primary_kingdom: str, secondary_kingdom: str) -> Dict[str, Any]:
         if card:
             bot_hand.append(card)
 
-    # Создание полей с планетами
     player_field = {'back': [None] * MAX_BACK_ROW}
     bot_field = {'back': [None] * MAX_BACK_ROW}
 
-    # Планеты на слоте PLANET_SLOT (индекс 3)
     player_field['back'][PLANET_SLOT] = {
-        'is_planet': True,
-        'health': STARTING_HP,
-        'max_health': STARTING_HP,
-        'owner': 'player'
+        'is_planet': True, 'health': STARTING_HP, 'max_health': STARTING_HP, 'owner': 'player'
     }
     bot_field['back'][PLANET_SLOT] = {
-        'is_planet': True,
-        'health': STARTING_HP,
-        'max_health': STARTING_HP,
-        'owner': 'bot'
+        'is_planet': True, 'health': STARTING_HP, 'max_health': STARTING_HP, 'owner': 'bot'
     }
 
-    # Экотон (4 слота)
     ecotone = [None] * MAX_LBS
-
-    # Определяем, кто ходит первым (случайно)
     is_player_turn = random.choice([True, False])
 
     game = {
@@ -72,7 +60,6 @@ def init_game(primary_kingdom: str, secondary_kingdom: str) -> Dict[str, Any]:
         'round_number': 1,
         'current_atp': 0,
         'is_player_turn': is_player_turn,
-        'is_first_turn_of_game': True,
         'bot_moved_this_round': False,
         'game_over': False,
         'log': [],
@@ -80,7 +67,6 @@ def init_game(primary_kingdom: str, secondary_kingdom: str) -> Dict[str, Any]:
         'bot_deck_empty_rounds': 0,
     }
 
-    # Если игрок ходит первым — сразу выдаём мутагены за 1-й раунд
     if is_player_turn:
         game['current_atp'] = min(1, MAX_ATP)
         game['log'].append("👤 Ты ходишь первым!")
@@ -90,247 +76,36 @@ def init_game(primary_kingdom: str, secondary_kingdom: str) -> Dict[str, Any]:
     return game
 
 
-def start_player_turn(game: Dict[str, Any]) -> Dict[str, Any]:
-    """Начало хода игрока: добор карты и получение мутагенов
+# ─── ХОД ИГРОКА ────────────────────────────────────────────────────────
 
-    Мутагены = номер раунда (но не больше MAX_ATP = 10).
-    Неиспользованные мутагены сгорают — устанавливаются заново.
-    """
+def start_player_turn(game: Dict[str, Any]) -> Dict[str, Any]:
+    """Начало хода игрока: мутагены = номер раунда (сгорают), добор карты."""
 
     round_num = game['round_number']
-
-    # Неиспользованные мутагены сгорают, устанавливаем новые = номер раунда
     game['current_atp'] = min(round_num, MAX_ATP)
 
-    # Добор 1 карты из колоды
     card, game['player_deck'] = draw_card(game['player_deck'])
     if card:
         game['player_hand'].append(card)
-        game['log'].append(
-            f"📩 Взята карта: {card.get('emoji', '🃏')} {card.get('name', '')}"
-        )
+        game['log'].append(f"📩 Взята карта: {card.get('emoji', '🃏')} {card.get('name', '')}")
     else:
-        # Колода пуста — урон от истощения
         game = apply_deck_exhaustion_damage(game, 'player')
 
     game['is_player_turn'] = True
-    game['log'].append(
-        f"🧪 Получено {game['current_atp']} мутагенов (раунд {round_num})"
-    )
-
+    game['log'].append(f"🧪 Получено {game['current_atp']} мутагенов (раунд {round_num})")
     return game
 
 
-def _find_guard(field_back: List) -> Optional[int]:
-    """Поиск существа с Охраной в указанном поле"""
-    for slot in range(MAX_BACK_ROW):
-        if slot == PLANET_SLOT:
-            continue
-        creature = field_back[slot]
-        if creature and 'Охрана' in creature.get('keywords', ''):
-            return slot
-    return None
-
-
-def _deal_damage_to_creature(creature: Dict[str, Any], damage: int) -> bool:
-    """Нанесение урона существу. Возвращает True, если существо уничтожено."""
-    creature['health'] = creature.get('health', 0) - damage
-    return creature['health'] <= 0
-
-
-def perform_attack(
-    game: Dict[str, Any],
-    attacker_zone: str,
-    attacker_slot: int,
-    target_zone: str,
-    target_slot: int
-) -> Dict[str, Any]:
-    """Выполнение атаки.
-
-    attacker_zone: 'ecotone' | 'mo' — откуда атакует
-    attacker_slot: индекс слота атакующего
-    target_zone: 'mo' (МО противника) | 'ecotone'
-    target_slot: индекс слота цели
-
-    Правила боя:
-    - Обычные: атакуют из экотона → МО или из МО → экотон. Оба получают урон.
-    - Дистанционные: атакуют из МО → МО без ответного урона.
-      В остальных случаях (МО→экотон, экотон→МО) — получают ответный урон.
-    - Урон = Атака − Броня цели (минимум 0).
-    - Ответный урон = Атака цели − Броня атакующего (минимум 0).
-    """
-
-    # --- Получаем атакующее существо ---
-    if attacker_zone == 'ecotone':
-        ecotone = game.get('ecotone', [])
-        if attacker_slot >= len(ecotone) or ecotone[attacker_slot] is None:
-            return game
-        attacker_data = ecotone[attacker_slot]
-        if attacker_data['owner'] != 'player':
-            return game
-        attacker_creature = attacker_data['card']
-    elif attacker_zone == 'mo':
-        field = game.get('player_field', {'back': [None] * MAX_BACK_ROW})
-        if attacker_slot >= len(field['back']) or field['back'][attacker_slot] is None:
-            return game
-        attacker_creature = field['back'][attacker_slot]
-        if attacker_creature.get('is_planet'):
-            return game
-    else:
-        return game
-
-    attack = attacker_creature.get('attack', 0)
-    is_ranged = 'Дистанционная атака' in attacker_creature.get('keywords', '')
-
-    # Ближний бой? (оба получают урон)
-    # Дистанционная атака из МО в МО — единственный случай без ответного урона
-    is_close_combat = not (is_ranged and attacker_zone == 'mo' and target_zone == 'mo')
-
-    # --- Получаем цель ---
-    if target_zone == 'mo':
-        bot_back = game['bot_field']['back']
-        if target_slot >= len(bot_back) or bot_back[target_slot] is None:
-            return game
-
-        target_data = bot_back[target_slot]
-
-        if target_data.get('is_planet'):
-            # Атака планеты — проверяем Охрану
-            guard_slot = _find_guard(bot_back)
-            if guard_slot is not None:
-                target_data = bot_back[guard_slot]
-                target_slot = guard_slot
-                game['log'].append(
-                    f"🛡️ Охрана! Атака перенаправлена на "
-                    f"{target_data.get('emoji', '🃏')} {target_data.get('name', '')}"
-                )
-
-            if target_data.get('is_planet'):
-                # Атакуем планету (охраны нет или планета)
-                damage = max(0, attack)
-                game['bot_planet_health'] = max(0, game['bot_planet_health'] - damage)
-                game['log'].append(
-                    f"⚔️ {attacker_creature.get('emoji', '🃏')} "
-                    f"{attacker_creature.get('name', '')} "
-                    f"атакует планету противника — {damage} урона!"
-                )
-                # Планета не наносит ответный урон
-                is_close_combat = False
-            else:
-                # Атака на охраняющее существо
-                armor = target_data.get('armor', 0)
-                damage = max(0, attack - armor)
-                destroyed = _deal_damage_to_creature(target_data, damage)
-                game['log'].append(
-                    f"⚔️ {attacker_creature.get('emoji', '🃏')} атакует "
-                    f"{target_data.get('emoji', '🃏')} ({target_data.get('name', '')}) — "
-                    f"{damage} урона (броня {armor})"
-                )
-                if destroyed:
-                    bot_back[target_slot] = None
-                    game['log'].append(
-                        f"💀 {target_data.get('emoji', '🃏')} "
-                        f"{target_data.get('name', '')} уничтожен!"
-                    )
-        else:
-            # Атака существа в МО противника
-            armor = target_data.get('armor', 0)
-            damage = max(0, attack - armor)
-            destroyed = _deal_damage_to_creature(target_data, damage)
-            game['log'].append(
-                f"⚔️ {attacker_creature.get('emoji', '🃏')} атакует "
-                f"{target_data.get('emoji', '🃏')} ({target_data.get('name', '')}) — "
-                f"{damage} урона (броня {armor})"
-            )
-            if destroyed:
-                bot_back[target_slot] = None
-                game['log'].append(
-                    f"💀 {target_data.get('emoji', '🃏')} "
-                    f"{target_data.get('name', '')} уничтожен!"
-                )
-
-    elif target_zone == 'ecotone':
-        ecotone = game.get('ecotone', [])
-        if target_slot >= len(ecotone) or ecotone[target_slot] is None:
-            return game
-
-        target_data = ecotone[target_slot]
-        if target_data['owner'] == 'player':
-            return game  # Нельзя атаковать своё существо
-
-        target_creature = target_data['card']
-        armor = target_creature.get('armor', 0)
-        damage = max(0, attack - armor)
-        destroyed = _deal_damage_to_creature(target_creature, damage)
-        game['log'].append(
-            f"⚔️ {attacker_creature.get('emoji', '🃏')} атакует "
-            f"{target_creature.get('emoji', '🃏')} ({target_creature.get('name', '')}) "
-            f"в экотоне — {damage} урона (броня {armor})"
-        )
-        if destroyed:
-            ecotone[target_slot] = None
-            game['log'].append(
-                f"💀 {target_creature.get('emoji', '🃏')} "
-                f"{target_creature.get('name', '')} уничтожен!"
-            )
-    else:
-        return game
-
-    # --- Ответный урон (только в ближнем бою) ---
-    if is_close_combat:
-        # Определяем атаку цели для ответного удара
-        target_attack = 0
-        target_emoji = ''
-        target_name = ''
-
-        if target_zone == 'mo':
-            bot_back = game['bot_field']['back']
-            if target_slot < len(bot_back) and bot_back[target_slot] is not None:
-                t = bot_back[target_slot]
-                if not t.get('is_planet'):
-                    target_attack = t.get('attack', 0)
-                    target_emoji = t.get('emoji', '🃏')
-                    target_name = t.get('name', '')
-        elif target_zone == 'ecotone':
-            ecotone = game.get('ecotone', [])
-            if target_slot < len(ecotone) and ecotone[target_slot] is not None:
-                t = ecotone[target_slot]['card']
-                target_attack = t.get('attack', 0)
-                target_emoji = t.get('emoji', '🃏')
-                target_name = t.get('name', '')
-
-        if target_attack > 0:
-            attacker_armor = attacker_creature.get('armor', 0)
-            counter_damage = max(0, target_attack - attacker_armor)
-
-            if counter_damage > 0:
-                attacker_destroyed = _deal_damage_to_creature(attacker_creature, counter_damage)
-                game['log'].append(
-                    f"↩️ {target_emoji} {target_name} наносит ответный урон "
-                    f"{attacker_creature.get('emoji', '🃏')} "
-                    f"{attacker_creature.get('name', '')} — {counter_damage}"
-                )
-                if attacker_destroyed:
-                    if attacker_zone == 'ecotone':
-                        game['ecotone'][attacker_slot] = None
-                    elif attacker_zone == 'mo':
-                        game['player_field']['back'][attacker_slot] = None
-                    game['log'].append(
-                        f"💀 {attacker_creature.get('emoji', '🃏')} "
-                        f"{attacker_creature.get('name', '')} уничтожен!"
-                    )
-
-    return game
-
+# ─── ХОД БОТА ──────────────────────────────────────────────────────────
 
 def bot_turn(game: Dict[str, Any]) -> Dict[str, Any]:
-    """Ход бота: добор карты, разыгрывание, перемещение, атака"""
+    """Ход бота: добор карты, разыгрывание, перемещение, атака."""
 
     if game.get('game_over', False):
         return game
 
     round_num = game['round_number']
-    bot_atp = min(round_num, MAX_ATP)  # Мутагены бота = номер раунда
+    bot_atp = min(round_num, MAX_ATP)
 
     # Добор карты
     card, game['bot_deck'] = draw_card(game['bot_deck'])
@@ -339,21 +114,13 @@ def bot_turn(game: Dict[str, Any]) -> Dict[str, Any]:
     else:
         game = apply_deck_exhaustion_damage(game, 'bot')
 
-    # --- Разыгрывание карт ---
-    sorted_hand = sorted(
-        [(i, c) for i, c in enumerate(game['bot_hand'])],
-        key=lambda x: x[1].get('cost', 0),
-        reverse=True
-    )
-
-    for _, card_data in sorted_hand:
+    # Разыгрывание карт (дорогие сначала)
+    for card_data in sorted(game['bot_hand'], key=lambda c: c.get('cost', 0), reverse=True):
         if bot_atp <= 0:
             break
-
         cost = card_data.get('cost', 0)
         if cost > bot_atp:
             continue
-
         for slot in range(MAX_BACK_ROW):
             if slot == PLANET_SLOT:
                 continue
@@ -361,13 +128,10 @@ def bot_turn(game: Dict[str, Any]) -> Dict[str, Any]:
                 game['bot_field']['back'][slot] = card_data
                 bot_atp -= cost
                 game['bot_hand'].remove(card_data)
-                game['log'].append(
-                    f"🤖 Противник разыграл {card_data.get('emoji', '🃏')} "
-                    f"{card_data.get('name', '')} (слот {slot + 1})"
-                )
+                game['log'].append(f"🤖 Противник разыграл {card_data.get('emoji', '🃏')} {card_data.get('name', '')} (слот {slot + 1})")
                 break
 
-    # --- Перемещение существ в экотон ---
+    # Перемещение в экотон
     for slot in range(MAX_BACK_ROW):
         if slot == PLANET_SLOT:
             continue
@@ -377,47 +141,39 @@ def bot_turn(game: Dict[str, Any]) -> Dict[str, Any]:
             if bot_atp >= move_cost:
                 for eco_slot in range(MAX_LBS):
                     if game['ecotone'][eco_slot] is None:
-                        game['ecotone'][eco_slot] = {
-                            'owner': 'bot',
-                            'card': creature
-                        }
+                        game['ecotone'][eco_slot] = {'owner': 'bot', 'card': creature}
                         game['bot_field']['back'][slot] = None
                         bot_atp -= move_cost
-                        game['log'].append(
-                            f"🤖 Противник переместил "
-                            f"{creature.get('emoji', '🃏')} {creature.get('name', '')} "
-                            f"в экотон"
-                        )
+                        game['log'].append(f"🤖 Противник переместил {creature.get('emoji', '🃏')} {creature.get('name', '')} в экотон")
                         break
 
-    # --- Атака ---
-    attacked = False
+    # Атака (3 приоритета)
+    _bot_attack(game)
 
-    # 1. Атака существами из экотона → МО игрока
+    return check_game_over(game)
+
+
+def _bot_attack(game: Dict[str, Any]) -> None:
+    """Логика атаки бота (модифицирует game in-place)."""
+    attacked = False
+    player_back = game['player_field']['back']
+
+    # 1. Из экотона → МО игрока
     for eco_slot in range(MAX_LBS):
         if attacked:
-            break
+            return
         slot_data = game['ecotone'][eco_slot]
         if slot_data and slot_data['owner'] == 'bot':
-            player_back = game['player_field']['back']
             guard_slot = _find_guard(player_back)
+            target = guard_slot if guard_slot is not None else PLANET_SLOT
+            perform_attack(game, 'ecotone', eco_slot, 'mo', target, 'bot')
+            attacked = True
 
-            if guard_slot is not None:
-                game = perform_attack(
-                    game, 'ecotone', eco_slot, 'mo', guard_slot
-                )
-                attacked = True
-            else:
-                game = perform_attack(
-                    game, 'ecotone', eco_slot, 'mo', PLANET_SLOT
-                )
-                attacked = True
-
-    # 2. Атака существами из МО → экотон (если есть цели)
+    # 2. Из МО → экотон (если есть цели)
     if not attacked:
         for slot in range(MAX_BACK_ROW):
             if attacked:
-                break
+                return
             if slot == PLANET_SLOT:
                 continue
             creature = game['bot_field']['back'][slot]
@@ -425,43 +181,29 @@ def bot_turn(game: Dict[str, Any]) -> Dict[str, Any]:
                 for eco_slot in range(MAX_LBS):
                     eco_data = game['ecotone'][eco_slot]
                     if eco_data and eco_data['owner'] == 'player':
-                        game = perform_attack(
-                            game, 'mo', slot, 'ecotone', eco_slot
-                        )
+                        perform_attack(game, 'mo', slot, 'ecotone', eco_slot, 'bot')
                         attacked = True
                         break
 
-    # 3. Если не атаковали и есть д��станционные — атакуем МО игрока из МО
+    # 3. Дистанционная из МО → МО
     if not attacked:
         for slot in range(MAX_BACK_ROW):
             if attacked:
-                break
+                return
             if slot == PLANET_SLOT:
                 continue
             creature = game['bot_field']['back'][slot]
-            if creature and not creature.get('is_planet'):
-                is_ranged = 'Дистанционная атака' in creature.get('keywords', '')
-                if is_ranged:
-                    player_back = game['player_field']['back']
-                    guard_slot = _find_guard(player_back)
-                    if guard_slot is not None:
-                        game = perform_attack(
-                            game, 'mo', slot, 'mo', guard_slot
-                        )
-                    else:
-                        game = perform_attack(
-                            game, 'mo', slot, 'mo', PLANET_SLOT
-                        )
-                    attacked = True
+            if creature and not creature.get('is_planet') and 'Дистанционная атака' in creature.get('keywords', ''):
+                guard_slot = _find_guard(player_back)
+                target = guard_slot if guard_slot is not None else PLANET_SLOT
+                perform_attack(game, 'mo', slot, 'mo', target, 'bot')
+                attacked = True
 
-    # Проверка завершения игры
-    game = check_game_over(game)
 
-    return game
-
+# ─── РАЗМЕЩЕНИЕ КАРТЫ ─────────────────────────────────────────────────
 
 def place_card_on_field(game: Dict[str, Any], card_index: int, slot: int) -> Dict[str, Any]:
-    """Размещение карты из руки в указанный слот Места Обитания"""
+    """Размещение карты из руки в указанный слот Места Обитания."""
 
     if slot == PLANET_SLOT:
         return {'error': '❌ Нельзя разместить карту на слоте планеты!'}
@@ -475,29 +217,23 @@ def place_card_on_field(game: Dict[str, Any], card_index: int, slot: int) -> Dic
     current_atp = game.get('current_atp', 0)
 
     if cost > current_atp:
-        return {
-            'error': f'❌ Недостаточно мутагенов! Нужно {cost}, есть {current_atp}'
-        }
+        return {'error': f'❌ Недостаточно мутагенов! Нужно {cost}, есть {current_atp}'}
 
     field = game.get('player_field', {'back': [None] * MAX_BACK_ROW})
     if field['back'][slot] is not None:
         return {'error': '❌ Слот занят!'}
 
-    # Размещаем карту
     field['back'][slot] = card
     game['player_hand'].pop(card_index)
     game['current_atp'] -= cost
-
-    game['log'].append(
-        f"🃏 Разыграна {card.get('emoji', '🃏')} {card.get('name', '')} "
-        f"в слот {slot + 1}"
-    )
-
+    game['log'].append(f"🃏 Разыграна {card.get('emoji', '🃏')} {card.get('name', '')} в слот {slot + 1}")
     return {'success': True}
 
 
+# ─── ПЕРЕМЕЩЕНИЕ В ЭКОТОН ─────────────────────────────────────────────
+
 def move_to_ecotone(game: Dict[str, Any], slot: int) -> Dict[str, Any]:
-    """Перемещение существа из Места Обитания в Экотон"""
+    """Перемещение существа из Места Обитания в Экотон."""
 
     if slot == PLANET_SLOT:
         game['log'].append('❌ Нельзя переместить планету в экотон!')
@@ -514,34 +250,183 @@ def move_to_ecotone(game: Dict[str, Any], slot: int) -> Dict[str, Any]:
     current_atp = game.get('current_atp', 0)
 
     if move_cost > current_atp:
-        game['log'].append(
-            f'❌ Недостаточно мутагенов для перемещения! Нужно {move_cost}'
-        )
+        game['log'].append(f'❌ Недостаточно мутагенов для перемещения! Нужно {move_cost}')
         return game
 
-    # Ищем свободный слот в экотоне
     ecotone = game.get('ecotone', [None] * MAX_LBS)
     for eco_slot in range(MAX_LBS):
         if ecotone[eco_slot] is None:
-            ecotone[eco_slot] = {
-                'owner': 'player',
-                'card': creature
-            }
+            ecotone[eco_slot] = {'owner': 'player', 'card': creature}
             field['back'][slot] = None
             game['current_atp'] -= move_cost
             game['ecotone'] = ecotone
-            game['log'].append(
-                f"🚀 {creature.get('emoji', '🃏')} {creature.get('name', '')} "
-                f"перемещён в экотон (слот {eco_slot + 1})"
-            )
+            game['log'].append(f"🚀 {creature.get('emoji', '🃏')} {creature.get('name', '')} перемещён в экотон (слот {eco_slot + 1})")
             return game
 
     game['log'].append('❌ Нет свободных слотов в экотоне!')
     return game
 
 
+# ─── БОЕВАЯ СИСТЕМА ───────────────────────────────────────────────────
+
+def _find_guard(field_back: List) -> Optional[int]:
+    """Поиск существа с Охраной."""
+    for slot in range(MAX_BACK_ROW):
+        if slot == PLANET_SLOT:
+            continue
+        creature = field_back[slot]
+        if creature and 'Охрана' in creature.get('keywords', ''):
+            return slot
+    return None
+
+
+def _deal_damage(creature: Dict[str, Any], damage: int) -> bool:
+    """Нанести урон существу. True — уничтожено."""
+    creature['health'] = creature.get('health', 0) - damage
+    return creature['health'] <= 0
+
+
+def _get_creature(game: Dict[str, Any], zone: str, slot: int, owner: str) -> Optional[Dict]:
+    """Получить существо из зоны. owner='player'|'bot'."""
+    if zone == 'ecotone':
+        ecotone = game.get('ecotone', [])
+        if slot < len(ecotone) and ecotone[slot] and ecotone[slot]['owner'] == owner:
+            return ecotone[slot]['card']
+    elif zone == 'mo':
+        field_key = 'player_field' if owner == 'player' else 'bot_field'
+        field = game.get(field_key, {'back': [None] * MAX_BACK_ROW})
+        if slot < len(field['back']) and field['back'][slot] and not field['back'][slot].get('is_planet'):
+            return field['back'][slot]
+    return None
+
+
+def _remove_creature(game: Dict[str, Any], zone: str, slot: int, owner: str) -> None:
+    """Удалить существо из зоны."""
+    if zone == 'ecotone':
+        game['ecotone'][slot] = None
+    elif zone == 'mo':
+        field_key = 'player_field' if owner == 'player' else 'bot_field'
+        game[field_key]['back'][slot] = None
+
+
+def perform_attack(
+    game: Dict[str, Any],
+    attacker_zone: str,
+    attacker_slot: int,
+    target_zone: str,
+    target_slot: int,
+    attacker_owner: str = 'player'
+) -> Dict[str, Any]:
+    """Выполнение атаки.
+
+    Правила:
+    - Обычные: экотон↔МО — оба получают урон.
+    - Дистанционные: МО→МО — без ответного урона.
+      В остальных случаях (МО→экотон, экотон→МО) — получают ответ.
+    - Урон = Атака − Броня цели.
+    - Ответный урон = Атака цели − Броня атакующего.
+    """
+
+    # Атакующий
+    attacker = _get_creature(game, attacker_zone, attacker_slot, attacker_owner)
+    if not attacker:
+        return game
+
+    attack = attacker.get('attack', 0)
+    is_ranged = 'Дистанционная атака' in attacker.get('keywords', '')
+    is_close_combat = not (is_ranged and attacker_zone == 'mo' and target_zone == 'mo')
+
+    # Цель
+    if target_zone == 'mo':
+        enemy_owner = 'bot' if attacker_owner == 'player' else 'player'
+        field_key = 'bot_field' if attacker_owner == 'player' else 'player_field'
+        field = game[field_key]['back']
+
+        if target_slot >= len(field) or field[target_slot] is None:
+            return game
+
+        target = field[target_slot]
+
+        # Атака на планету — проверка Охраны
+        if target.get('is_planet'):
+            guard_slot = _find_guard(field)
+            if guard_slot is not None:
+                target = field[guard_slot]
+                target_slot = guard_slot
+                game['log'].append(f"🛡️ Охрана! Атака перенаправлена на {target.get('emoji', '🃏')} {target.get('name', '')}")
+
+            if target.get('is_planet'):
+                damage = max(0, attack)
+                game[f'{enemy_owner}_planet_health'] = max(0, game[f'{enemy_owner}_planet_health'] - damage)
+                game['log'].append(f"⚔️ {attacker.get('emoji', '🃏')} {attacker.get('name', '')} атакует планету — {damage} урона!")
+                is_close_combat = False
+            else:
+                _attack_creature(game, attacker, target, attack, field, target_slot)
+        else:
+            _attack_creature(game, attacker, target, attack, field, target_slot)
+
+    elif target_zone == 'ecotone':
+        ecotone = game.get('ecotone', [])
+        if target_slot >= len(ecotone) or ecotone[target_slot] is None:
+            return game
+
+        target_data = ecotone[target_slot]
+        enemy_owner = 'bot' if attacker_owner == 'player' else 'player'
+        if target_data['owner'] != enemy_owner:
+            return game
+
+        target_creature = target_data['card']
+        armor = target_creature.get('armor', 0)
+        damage = max(0, attack - armor)
+        destroyed = _deal_damage(target_creature, damage)
+        game['log'].append(f"⚔️ {attacker.get('emoji', '🃏')} атакует {target_creature.get('emoji', '🃏')} ({target_creature.get('name', '')}) в экотоне — {damage} урона (броня {armor})")
+        if destroyed:
+            ecotone[target_slot] = None
+            game['log'].append(f"💀 {target_creature.get('emoji', '🃏')} {target_creature.get('name', '')} уничтожен!")
+
+        # Ответный урон
+        if is_close_combat and not destroyed:
+            _counter_attack(game, target_creature, attacker, attacker_zone, attacker_slot, attacker_owner)
+    else:
+        return game
+
+    return game
+
+
+def _attack_creature(game, attacker, target, attack, field, target_slot):
+    """Атака существа в МО."""
+    armor = target.get('armor', 0)
+    damage = max(0, attack - armor)
+    destroyed = _deal_damage(target, damage)
+    game['log'].append(f"⚔️ {attacker.get('emoji', '🃏')} атакует {target.get('emoji', '🃏')} ({target.get('name', '')}) — {damage} урона (броня {armor})")
+    if destroyed:
+        field[target_slot] = None
+        game['log'].append(f"💀 {target.get('emoji', '🃏')} {target.get('name', '')} уничтожен!")
+
+
+def _counter_attack(game, target_creature, attacker, attacker_zone, attacker_slot, attacker_owner):
+    """Ответный урон."""
+    target_attack = target_creature.get('attack', 0)
+    if target_attack <= 0:
+        return
+
+    attacker_armor = attacker.get('armor', 0)
+    counter_damage = max(0, target_attack - attacker_armor)
+    if counter_damage <= 0:
+        return
+
+    destroyed = _deal_damage(attacker, counter_damage)
+    game['log'].append(f"↩️ {target_creature.get('emoji', '🃏')} {target_creature.get('name', '')} наносит ответный урон {attacker.get('emoji', '🃏')} {attacker.get('name', '')} — {counter_damage}")
+    if destroyed:
+        _remove_creature(game, attacker_zone, attacker_slot, attacker_owner)
+        game['log'].append(f"💀 {attacker.get('emoji', '🃏')} {attacker.get('name', '')} уничтожен!")
+
+
+# ─── ПРОВЕРКА ЗАВЕРШЕНИЯ ──────────────────────────────────────────────
+
 def check_game_over(game: Dict[str, Any]) -> Dict[str, Any]:
-    """Проверка завершения игры"""
+    """Проверка завершения игры. Возвращает game (всегда truthy).
+    Используйте game['game_over'] для проверки."""
 
     if game.get('player_planet_health', STARTING_HP) <= 0:
         game['game_over'] = True
@@ -554,24 +439,36 @@ def check_game_over(game: Dict[str, Any]) -> Dict[str, Any]:
     return game
 
 
+# ─── УРОН ОТ ИСТОЩЕНИЯ КОЛОДЫ ─────────────────────────────────────────
+
 def apply_deck_exhaustion_damage(game: Dict[str, Any], target: str) -> Dict[str, Any]:
-    """Нанесение урона от истощения колоды по арифметической прогрессии.
-    Если колода игрока пуста — его планета получает урон 1, 2, 3...
-    """
+    """Урон от истощения коло��ы: 1, 2, 3... за каждый пустой добор."""
 
-    if target == 'player':
-        if not game['player_deck']:
-            game['player_deck_empty_rounds'] = game.get('player_deck_empty_rounds', 0) + 1
-            damage = game['player_deck_empty_rounds']
-            game['player_planet_health'] = max(0, game['player_planet_health'] - damage)
-            game['log'].append(f'💀 Твоя колода пуста! Планета получает {damage} урона')
-    elif target == 'bot':
-        if not game['bot_deck']:
-            game['bot_deck_empty_rounds'] = game.get('bot_deck_empty_rounds', 0) + 1
-            damage = game['bot_deck_empty_rounds']
-            game['bot_planet_health'] = max(0, game['bot_planet_health'] - damage)
-            game['log'].append(
-                f'💀 Колода противника пуста! Его планета получает {damage} урона'
-            )
+    if target == 'player' and not game['player_deck']:
+        game['player_deck_empty_rounds'] += 1
+        damage = game['player_deck_empty_rounds']
+        game['player_planet_health'] = max(0, game['player_planet_health'] - damage)
+        game['log'].append(f'💀 Твоя колода пуста! Планета получает {damage} урона')
+    elif target == 'bot' and not game['bot_deck']:
+        game['bot_deck_empty_rounds'] += 1
+        damage = game['bot_deck_empty_rounds']
+        game['bot_planet_health'] = max(0, game['bot_planet_health'] - damage)
+        game['log'].append(f'💀 Колода противника пуста! Его планета получает {damage} урона')
 
+    return game
+
+
+# ─── ВСПОМОГАТЕЛЬНАЯ: ЗАВЕРШЕНИЕ ХОДА ─────────────────────────────────
+
+def end_round_after_attack(game: Dict[str, Any]) -> Dict[str, Any]:
+    """Завершить раунд после атаки: ход бота → новый раунд → ход игрока."""
+    game = bot_turn(game)
+    game['bot_moved_this_round'] = True
+
+    if game['game_over']:
+        return game
+
+    game['round_number'] += 1
+    game['bot_moved_this_round'] = False
+    game = start_player_turn(game)
     return game
