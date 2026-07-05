@@ -97,9 +97,9 @@ async def cmd_genome(message: types.Message):
     )
 
 
-@start_router.message(Command("clean"))
-async def cmd_clean(message: types.Message):
-    """Обработчик команды /clean — очистка чата"""
+@start_router.message(Command("clear"))
+async def cmd_clear(message: types.Message):
+    """Обработчик команды /clear — очистка чата"""
     await message.delete()
     msg = await message.answer("🧹 Чат очищен!")
     await msg.delete()
