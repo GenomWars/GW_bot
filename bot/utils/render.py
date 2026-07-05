@@ -72,7 +72,7 @@ def render_field(game: Dict[str, Any], user_id: int) -> str:
     
     # Заголовок
     turn_str = "👤 Твой ход" if is_player_turn else "⏳ Ход противника"
-    lines.append(f"🧬 МУТАЦИЯ — Раунд {game.get('round_number', 1)} | 🧪 Мутагены: {game.get('current_atp', 1)} | {turn_str}")
+    lines.append(f"🧬 ГЕНОМНЫЕ ВОЙНЫ — Раунд {game.get('round_number', 1)} | 🧪 Мутагены: {game.get('current_atp', 1)} | {turn_str}")
     lines.append("")
     
     # Планета противника
@@ -94,16 +94,16 @@ def render_field(game: Dict[str, Any], user_id: int) -> str:
             lines.append(f"  [{i+1}] ⬜")
     lines.append("")
     
-    # Экотон (с нумерацией слотов)
+    # Экотон (горизонтально)
     lines.append("⚔️ ЭКОТОН:")
     lbs = player_field.get('lbs', [])
+    eco_parts = []
     for i in range(MAX_LBS):
         if i < len(lbs) and lbs[i]:
-            card = lbs[i]
-            kingdom_symbol = render_kingdom_symbol(card.get('kingdom', ''))
-            lines.append(f"  [{i+1}] {render_card_short(lbs[i])}")
+            eco_parts.append(f"[{i+1}] {render_card_short(lbs[i])}")
         else:
-            lines.append(f"  [{i+1}] ⬜")
+            eco_parts.append(f"[{i+1}] ⬜")
+    lines.append("  " + " | ".join(eco_parts))
     lines.append("")
     
     # МО игрока
