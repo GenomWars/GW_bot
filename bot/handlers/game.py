@@ -68,13 +68,12 @@ async def callback_choose_secondary(callback: types.CallbackQuery):
 
     save_game(callback.from_user.id, game)
 
-    await callback.message.delete()
-
+    # Редактируем то же сообщение вместо удаления + отправки нового
     text = render_field(game, callback.from_user.id)
     keyboard = create_game_keyboard(game)
 
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
     await callback.answer(f"✅ Игра начата! {primary} + {secondary}")
-    await callback.message.answer(text, parse_mode="HTML", reply_markup=keyboard)
 
 
 @game_router.callback_query(lambda c: c.data.startswith("play_card_"))
@@ -188,7 +187,6 @@ async def callback_attack_execute(callback: types.CallbackQuery):
     """Обработчик выбора цели — выполняем атаку"""
 
     parts = callback.data.split("_")
-    # attack_tgt_eco_0_mo_1
     att_zone = 'ecotone' if parts[2] == 'eco' else 'mo'
     att_slot = int(parts[3])
     tgt_zone = 'mo' if parts[4] == 'mo' else 'ecotone'

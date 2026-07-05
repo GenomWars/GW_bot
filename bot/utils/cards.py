@@ -42,12 +42,12 @@ def create_deck(primary_kingdom: str, secondary_kingdom: str) -> List[Dict[str, 
 
     Основное царство:
       - Common карты: 3 копии каждого вида
-      - Rare карты: 2 копии каждого вида
+      - Rare карты: 2 копии каждого вида (всего 4 Rare карты)
     Второстепенное царство:
       - Common карты: 2 копии каждого вида
-      - Rare карты не включаются
+      - 1 случайная Rare карта
 
-    Всего формируется 24 карты, из которых случайно выбирается 20.
+    Из пула ~25 карт случайно выбирается 20.
     """
     pool = []
 
@@ -61,7 +61,15 @@ def create_deck(primary_kingdom: str, secondary_kingdom: str) -> List[Dict[str, 
                 for _ in range(2):
                     pool.append(dict(card_template))
 
-    # Из пула в 24 карты случайно выбираем 20
+    # Добавляем 1 случайную Rare карту из второстепенного царства
+    secondary_rares = [
+        c for c in CARDS_DATA
+        if c['kingdom'] == secondary_kingdom and c['rarity'] == 'Rare'
+    ]
+    if secondary_rares:
+        pool.append(dict(random.choice(secondary_rares)))
+
+    # Из пула случайно выбираем 20 карт
     deck = random.sample(pool, 20)
     return deck
 
